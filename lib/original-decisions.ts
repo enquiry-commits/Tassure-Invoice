@@ -1,16 +1,25 @@
 // Vincent's decisions about the 24 open split invoices that had no original the proof accepts (2026-10-07,
 // INV-QB-037), kept as DATA so each one can be read, tested and expire on its own. Two registers:
 //
-// 1. CONFIRMED_ORIGINALS — "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要重新画":
-//    four invoices whose original (the file from the company file server, attached to the invoice in
-//    QuickBooks) differs from what the system redraws only in how the lines are broken down — the same
-//    number, date, customer and total, but accounting regrouped the lines afterwards (900 -> 585 + 315, one
-//    1,000 line -> 500 + 500). The proof (lib/original-copy.ts) refuses such a file because its amounts are not a
-//    folding of the invoice's lines; Vincent's decision makes the system use it anyway, for THESE files only
-//    (named by sha256) and only while the invoice still is the version he looked at.
+// 1. CONFIRMED_ORIGINALS — use the original file from the company file server (attached to the invoice in
+//    QuickBooks) although the proof cannot show by itself that it is the original. Two rounds, same day:
+//    a. "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要重新画": four invoices whose original differs
+//       from what the system redraws only in how the lines are broken down — the same number, date, customer and
+//       total, but accounting regrouped the lines afterwards (900 -> 585 + 315, one 1,000 line -> 500 + 500).
+//       The proof (lib/original-copy.ts) refuses such a file because its amounts are not a folding of the
+//       invoice's lines.
+//    b. "现在这些（还没找到原装）和（在用重画）的我已经把原装的PDF放在上面了，你帮我放去附件，并且调整SOA 合并PDF内":
+//       thirteen more, the files named in chat — Co-Operate Associates TAB #02610167 (a text file; its ACRA lines are
+//       60 + 600 there and one 660 line in QuickBooks now) and the twelve invoices Vincent had first decided to leave
+//       as the redraw (REDRAW_DECISIONS below, now removed): their original is a PICTURE with no text, which the proof
+//       cannot read; each was compared by eye with the live invoice (number, date, customer, every row, total) and
+//       equals the redraw line for line. He now wants the original itself in the SOA, not a drawing of it.
+//    Vincent's decision makes the system use these files anyway, for THESE files only (named by sha256) and only
+//    while the invoice still is the version he looked at.
 // 2. REDRAW_DECISIONS — "不用管是说可以沿用的意思吗？如果可以沿用就沿用，并且把不用管的记录处理掉" and "不会发SOA
 //    的当成先不管": the system's redraw is what goes out and is right (or no SOA is sent), so these invoices
 //    leave the Invoice Originals to-do list. NOTHING about the PDF changes for them — they were already redrawn.
+//    Seven are left: six changed after they were sent (the SOA must show the CURRENT invoice) and Sanli (no SOA).
 //
 // Rules: (1) an entry is added only on Vincent's explicit word, never inferred; (2) every entry is tied to the
 // version of the invoice he decided about (number, date, customer, total) — when accounting changes any of them
@@ -21,7 +30,8 @@
 // net balance being 0, which this file cannot see — if it ever turns positive the SOA would carry QuickBooks' own PDF
 // (staff get the split-fallback warning when they download it).
 //
-// The only invoice left on the list is Co-Operate Associates TAB #02610167 (Vincent: "只留下唯一要处理的").
+// Nothing is left on the Invoice Originals list: every open split invoice either uses its original or has a
+// decision to be left as it is.
 
 import { sameInvoiceVersion, type ConfirmedOriginal, type InvoiceFacts } from './original-copy';
 
@@ -32,9 +42,11 @@ const DECIDED_ON = '2026-10-07';
 // ── 1. use the original ────────────────────────────────────────────────────
 
 const WHY_USE_ORIGINAL = 'same invoice number, date, customer and total as the client received; accounting only regrouped the lines afterwards — only the appearance differs, so the original is used and not redrawn';
+const WHY_USE_PICTURE_ORIGINAL = "the original is a picture with no text, so the proof cannot read it; compared by eye with the live invoice — same number, date, customer, rows and total, equal to the redraw line for line — and Vincent wants the original itself in the SOA, not a drawing of it";
 
 type ConfirmedEntry = ConfirmedOriginal & { book: Book; invoiceId: string };
-const confirm = (e: Omit<ConfirmedEntry, 'decidedBy' | 'decidedOn' | 'why'>): ConfirmedEntry => ({ ...e, decidedBy: DECIDED_BY, decidedOn: DECIDED_ON, why: WHY_USE_ORIGINAL });
+const confirm = (e: Omit<ConfirmedEntry, 'decidedBy' | 'decidedOn' | 'why'>, why: string = WHY_USE_ORIGINAL): ConfirmedEntry => ({ ...e, decidedBy: DECIDED_BY, decidedOn: DECIDED_ON, why });
+const confirmPicture = (e: Omit<ConfirmedEntry, 'decidedBy' | 'decidedOn' | 'why'>): ConfirmedEntry => confirm(e, WHY_USE_PICTURE_ORIGINAL);
 
 export const CONFIRMED_ORIGINALS: readonly ConfirmedEntry[] = [
   // 900 there, 585 + 315 in QuickBooks now (the 315 line has no description)
@@ -45,9 +57,35 @@ export const CONFIRMED_ORIGINALS: readonly ConfirmedEntry[] = [
   confirm({ book: 'TAB', invoiceId: '24778', invoiceNo: 'TAB 02611000', date: '27/08/2026', total: 1460, customer: 'Soon & Guan Manpower Trading Pte Ltd', sha256: '061d190587eee46867fdb8520991f6f7f960a065cbd4cd651aeed8fa9d03395a', fileName: 'INV02611000-SOON & GUAN MANPOWER TRAINING PTE. LTD.-S$1460.pdf' }),
   // a picture (no text) — 600 there, 285 + 315 now; compared by eye 2026-10-07: number, date, customer, 600 / 500 / -100 = 1,000
   confirm({ book: 'TAB', invoiceId: '18267', invoiceNo: 'TAB 02610788', date: '30/06/2026', total: 1000, customer: 'Minyotech Pte. Ltd.', sha256: '6911c83e051a13a1c653f2525692a3d4679cf92b1f953bc3bea16b9d28a140fa', fileName: 'INV02610788-Minyotech Pte. Ltd-S$1000.pdf' }),
+  // a text file ('Print To PDF', the older QuickBooks layout with "Net Total"): 600 / 600 / 60 / 600 there — the ACRA lines 60 + 600 are one 660 line in QuickBooks now, and the 50 Corp Sec twin folds into 550 = 600; compared by eye 2026-10-07. No payment terms in QuickBooks: until now the SOA carried QuickBooks' own split PDF
+  confirm({ book: 'TAB', invoiceId: '10402', invoiceNo: 'TAB 02610167', date: '02/03/2026', total: 1860, customer: 'Co-Operate Associates Pte. Ltd.', sha256: 'fc63a2bfa0e79625f8ea26c1684248cd0511fac9fd8f632794c2a5b3bcd9c580', fileName: 'INV02610167-Co-Operate Associates Pte. Ltd.-S$1860.pdf' }),
+  // a picture, 2 pages (the 2nd only holds the PayNow QR) — compared by eye 2026-10-07: number, date, customer, rows 600 / 300 / 60 / -100 = 860
+  confirmPicture({ book: 'TAB', invoiceId: '16247', invoiceNo: 'TAB 02610680', date: '11/06/2026', total: 860, customer: 'British Sports Pte. Ltd.', sha256: '72ac736a47742e4482504237a61f192bb30370024a6e9fb1ff9acac40b2982ab', fileName: 'INV02610680-British Sports Pte. Ltd-S$860.pdf' }),
+  // a picture — compared by eye 2026-10-07: rows 600 / 60 = 660
+  confirmPicture({ book: 'TAB', invoiceId: '16249', invoiceNo: 'TAB 02610682', date: '11/06/2026', total: 660, customer: 'Goldhill Memorial Centre Pte. Ltd.', sha256: 'a1870a9bea396e59b2e5b6a6b12aca1748d3c497a8128e30ab9b02bea2dffe9e', fileName: 'INV02610682-Goldhill Memorial Centre Pte. Ltd-S$660.pdf' }),
+  // a picture, 2 pages (the 2nd is blank apart from the letterhead footer) — compared by eye 2026-10-07: rows 400 / 800 / 60 = 1,260
+  confirmPicture({ book: 'TAB', invoiceId: '16254', invoiceNo: 'TAB 02610687', date: '11/06/2026', total: 1260, customer: 'International LCM Pte Ltd', sha256: '3bfc12efe8caa4147d4a75c4e673a8d8b489252282b23fa6584e3279034f30ab', fileName: 'INV02610687-International LCM Pte Ltd-S$1260.pdf' }),
+  // a picture — compared by eye 2026-10-07: rows 500 / 60 = 560
+  confirmPicture({ book: 'TAB', invoiceId: '16259', invoiceNo: 'TAB 02610691', date: '11/06/2026', total: 560, customer: 'Kindle Beacon Pte. Ltd.', sha256: '41e26daa717052f03b385d1744db46a7737c8cc244805af0073b85f4190212fa', fileName: 'INV02610691-Kindle Beacon Pte. Ltd.-S$560.pdf' }),
+  // a picture — compared by eye 2026-10-07: rows 500 / 60 = 560
+  confirmPicture({ book: 'TAB', invoiceId: '18268', invoiceNo: 'TAB 02610789', date: '30/06/2026', total: 560, customer: 'Minyotech Pte. Ltd.', sha256: 'bb339eac4e0227ed1e5d46b8899feccad34c57d2f25fd60291cbc0a9027f6dfa', fileName: 'INV02610789-Minyotech Pte. Ltd.-S$560.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 4,000
+  confirmPicture({ book: 'TAC', invoiceId: '1714', invoiceNo: 'TAC 02680044', date: '27/02/2026', total: 4000, customer: 'Aries Honor Shipping Pte Ltd', sha256: 'b528d3f78634e8adf9ad3c164ed570ff48869fa5325240e8c7087f4d2f7a5f9b', fileName: 'TAC02680044-Aries Honor Shipping Pte Ltd-S$4000.pdf' }),
+  // a picture — compared by eye 2026-10-07: rows 3,000 / 3,000 (the deposit) = 6,000
+  confirmPicture({ book: 'TAC', invoiceId: '2473', invoiceNo: 'TAC 02680124', date: '24/04/2026', total: 6000, customer: 'DEMIRER KABEL PTE. LTD.', sha256: '9d797a56178fc4aa62252805a03c285272c9638cbda5ffb8f9aebe63083e4ccb', fileName: 'TAC02680124-DEMIRER KABEL PTE. LTD.-S$6000.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 4,000
+  confirmPicture({ book: 'TAC', invoiceId: '2597', invoiceNo: 'TAC 02680133', date: '28/04/2026', total: 4000, customer: 'Yu An Bulk Holding Pte Ltd', sha256: '995ddfa87e21273a080ffb5b00ae1e775f252d4f365ec60d338b6bdd5b1d1521', fileName: 'TAC02680133-Yu An Bulk Holding Pte Ltd-S$4000.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 3,000
+  confirmPicture({ book: 'TAC', invoiceId: '2682', invoiceNo: 'TAC 02680153', date: '07/05/2026', total: 3000, customer: 'Singapore Hua Jin Investment Pte Ltd', sha256: '81a0c48f794325831004ba1c7238db749f56298b02bad8015bcce90589e54888', fileName: 'TAC02680153-Singapore Hua Jin Investment Pte Ltd-S$3000.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 3,000
+  confirmPicture({ book: 'TAC', invoiceId: '3337', invoiceNo: 'TAC 02680198', date: '16/06/2026', total: 3000, customer: 'Sunterra Trading Pte. Ltd.', sha256: 'e2fe9924ccf2e3a768077ae63d6010cb608732a9b55a534a91f24acbebb7ac41', fileName: 'TAC02680198-Sunterra Trading Pte. Ltd-S$3000.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 3,000
+  confirmPicture({ book: 'TAC', invoiceId: '3339', invoiceNo: 'TAC 02680200', date: '16/06/2026', total: 3000, customer: 'Warm Sea Wind Pte. Ltd.', sha256: '0864eb35743580553d934ec691b619b81dd6e76e4dc8ee7b27d266fba01dd378', fileName: 'TAC02680200-Warm Sea Wind Pte. Ltd.-S$3000.pdf' }),
+  // a picture — compared by eye 2026-10-07: one row 4,000
+  confirmPicture({ book: 'TAC', invoiceId: '3359', invoiceNo: 'TAC 02680210', date: '19/06/2026', total: 4000, customer: 'Najiwan Pte. Ltd.', sha256: '7031d3a4e0aaff6829208950f833c630f99df5e8a7a110b6c303b5ef4bb47ac6', fileName: 'TAC02680210-Najiwan Pte. Ltd.-S$4000.pdf' }),
 ];
 
-// The entries that cover this invoice (empty for every invoice but the four above).
+// The entries that cover this invoice (empty for every invoice that has none above).
 export function confirmedOriginalsFor(book: string, invoiceId: string): ConfirmedOriginal[] {
   return CONFIRMED_ORIGINALS.filter(c => c.book === book && c.invoiceId === invoiceId);
 }
@@ -55,7 +93,6 @@ export function confirmedOriginalsFor(book: string, invoiceId: string): Confirme
 // ── 2. the redraw is right / nothing to send ───────────────────────────────
 
 export const REDRAW_REASONS = {
-  'identical-to-original': "the original on the file server is a picture; compared line by line, the system's redraw shows exactly what the client received",
   'changed-after-sending': 'the invoice was changed after it was sent — the SOA must show the current invoice, which is what the redraw shows',
   'not-sent': "the customer's net balance is 0, so no SOA is sent for it; left as it is for now",
 } as const;
@@ -79,19 +116,6 @@ export const REDRAW_DECISIONS: readonly RedrawDecision[] = [
   decide({ book: 'TAB', invoiceId: '16391', invoiceNo: 'TAB 02610747', date: '18/06/2026', total: 760, customer: 'Hai Rui Pte. Ltd.', redraw: [700, 60], why: 'changed-after-sending' }),
   decide({ book: 'TAB', invoiceId: '13105', invoiceNo: 'TAB 02610580', date: '07/05/2026', total: 1120, customer: 'Singapore Hua Jin Investment Pte Ltd', redraw: [700, 360, 60], why: 'changed-after-sending' }),
   decide({ book: 'TAB', invoiceId: '11661', invoiceNo: 'TAB 02610402', date: '01/04/2026', total: 660, customer: 'Neostra Investment Pte. Ltd.', redraw: [600, 60], why: 'changed-after-sending' }),
-  // the original is a picture that matches the redraw line for line (rendered and compared 2026-10-07)
-  decide({ book: 'TAB', invoiceId: '18268', invoiceNo: 'TAB 02610789', date: '30/06/2026', total: 560, customer: 'Minyotech Pte. Ltd.', redraw: [500, 60], why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16259', invoiceNo: 'TAB 02610691', date: '11/06/2026', total: 560, customer: 'Kindle Beacon Pte. Ltd.', redraw: [500, 60], why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16254', invoiceNo: 'TAB 02610687', date: '11/06/2026', total: 1260, customer: 'International LCM Pte Ltd', redraw: [400, 800, 60], why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16249', invoiceNo: 'TAB 02610682', date: '11/06/2026', total: 660, customer: 'Goldhill Memorial Centre Pte. Ltd.', redraw: [600, 60], why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16247', invoiceNo: 'TAB 02610680', date: '11/06/2026', total: 860, customer: 'British Sports Pte. Ltd.', redraw: [600, 300, 60, -100], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3359', invoiceNo: 'TAC 02680210', date: '19/06/2026', total: 4000, customer: 'Najiwan Pte. Ltd.', redraw: [4000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3339', invoiceNo: 'TAC 02680200', date: '16/06/2026', total: 3000, customer: 'Warm Sea Wind Pte. Ltd.', redraw: [3000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3337', invoiceNo: 'TAC 02680198', date: '16/06/2026', total: 3000, customer: 'Sunterra Trading Pte. Ltd.', redraw: [3000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2682', invoiceNo: 'TAC 02680153', date: '07/05/2026', total: 3000, customer: 'Singapore Hua Jin Investment Pte Ltd', redraw: [3000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2597', invoiceNo: 'TAC 02680133', date: '28/04/2026', total: 4000, customer: 'Yu An Bulk Holding Pte Ltd', redraw: [4000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2473', invoiceNo: 'TAC 02680124', date: '24/04/2026', total: 6000, customer: 'DEMIRER KABEL PTE. LTD.', redraw: [3000, 3000], why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '1714', invoiceNo: 'TAC 02680044', date: '27/02/2026', total: 4000, customer: 'Aries Honor Shipping Pte Ltd', redraw: [4000], why: 'identical-to-original' }),
   // the customer nets to 0, no SOA is sent; and its deferred Reg Addr line has no service line to fold into
   decide({ book: 'TAB', invoiceId: '6358', invoiceNo: 'TAB 02511395', date: '19/12/2025', total: 1420, customer: 'Sanli Group Pte Ltd', redraw: null, why: 'not-sent' }),
 ];

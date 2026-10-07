@@ -2943,7 +2943,7 @@ again.
   another invoice; its findings are fixed and tested (the redraw binding, the all-pages
   rule, the exact-file upload, one sha256 helper, `queueOutcome` as a tested pure
   function). "只留下唯一要处理的…Co-Operate Associates Pte. Ltd.": TAB #02610167 is in
-  neither register and is the only invoice left on the list (it has no payment terms
+  neither register and was the only invoice left on the list until the FOLLOW-UP below (it has no payment terms
   in QuickBooks, so the SOA sends QuickBooks' own PDF with the Deferred line visible).
   Verified on the real books: the queue lists exactly that one (135 with the original
   in use, 19 decided, 0 unknown), and the real SOA route merges the originals for EVOP,
@@ -2964,10 +2964,42 @@ again.
   every branch of the upload against fakes, the decided file included),
   `test-original-status.ts` (72: the queue and its pure classification, the batched
   read, the remembered answers, who may call, the page) and
-  `test-original-decisions.ts` (73: the typed refusals, what a decision can and cannot
+  `test-original-decisions.ts` (74: the typed refusals, what a decision can and cannot
   cover, the register's data); with each safeguard removed one at a time on a copy
   (59 of them for the queue, the upload, the decisions, the routes and the page, on
   top of the proof's own), the tests fail.
+  FOLLOW-UP THE SAME EVENING (2026-10-07) — NOTHING IS LEFT ON THE LIST. Vincent: "现在这些
+  （还没找到原装）和（在用重画）的我已经把原装的PDF放在上面了，你帮我放去附件，并且调整SOA
+  合并PDF内", naming 13 files on the file server: Co-Operate Associates TAB #02610167 and the 12
+  picture invoices he had decided to leave as the redraw (TAB British Sports #02610680, Goldhill
+  #02610682, International LCM #02610687, Kindle Beacon #02610691, Minyotech #02610789; TAC Aries
+  Honor #02680044, DEMIRER KABEL #02680124, Yu An Bulk #02680133, Singapore Hua Jin #02680153,
+  Sunterra #02680198, Warm Sea Wind #02680200, Najiwan #02680210). They are the SAME files
+  (sha256) the 2026-10-06 round found; the server was only read, nothing on it was touched; each
+  was rendered with the Windows PDF renderer and compared by eye with the LIVE invoice (number,
+  date, customer, every row, total) and all 13 match — Co-Operate's original prints 600 / 600 /
+  60 / 600 where QuickBooks now holds 50 (Deferred) / 550 / 600 / 660, so only the ACRA lines
+  were regrouped. DONE: the 13 are in CONFIRMED_ORIGINALS (17 now; each by sha256 and invoice
+  version, the 12 pictures with their own reason "compared by eye, equal to the redraw"); the 12
+  "identical-to-original" redraw decisions are REMOVED, since his word changed from "leave the
+  redraw" to "use the original" (REDRAW_DECISIONS: 7 — 6 changed after sending, Sanli; the reason
+  'identical-to-original' no longer exists); and the 13 files are attached to their invoices in
+  QuickBooks (Co-Operate #1000001851 first, read back byte-identical, then TAB British Sports
+  #1000001812, Goldhill #1000001861, International LCM #1000001871, Kindle Beacon #1000001881,
+  Minyotech #02610789 #1000001891, and TAC #1000000641 / 651 / 661 / 671 / 681 / 691 / 701 in the
+  order above; IncludeOnSend false; a Note with the reason and the sha256; each checked against
+  the live invoice first and read back byte-identical after). VERIFIED on the real books, read
+  only: the queue — 0 waiting, 146 with the original in use, 7 decided, 0 unknown;
+  `getClientInvoicePdf` (behind the SOA, Email Drafts and Save PDF) serves all 17 register
+  invoices as EXACTLY the registered file; the real SOA route for the customers of the 13 — 0
+  merge errors, 0 split fallbacks (Co-Operate's SOA used to carry QuickBooks' own split PDF).
+  Two originals have a second page the client got as well: British Sports' holds only the PayNow
+  QR and International LCM's is blank apart from the letterhead footer — the SOA carries them as
+  they are. An entry lapses exactly like the first four: when accounting changes the invoice's
+  number, date, customer or total the proof decides again, a picture cannot pass it, and the
+  system's redraw goes out while the invoice is listed again. NOT seen: the deployed site — the
+  attachments are in QuickBooks already, but the SOA merges them only once the register change
+  is deployed (until then a picture is still redrawn and Co-Operate still gets QuickBooks' PDF).
 
 - **INV-QB-038** — The invoice numbers in the SOA detail open the invoice as the
   CLIENT receives it, not QuickBooks' own PDF. Vincent, 2026-10-07, after testing
