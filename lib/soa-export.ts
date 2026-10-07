@@ -2,7 +2,7 @@ import 'server-only';
 
 import ExcelJS from 'exceljs';
 import type { QbCompany } from './quickbooks';
-import { effectiveOwner, type SoaCompanyRow, type SoaCompanyRowWithSource } from './soa-data';
+import { responsiblePeople, peopleLabel, type SoaCompanyRow, type SoaCompanyRowWithSource } from './soa-data';
 import { AGING_BUCKETS } from './soa';
 
 // Shared by GET /api/billing/soa/export (one TAB/TAC/TAO sheet) and
@@ -238,7 +238,7 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
   sheet.getCell(3, 1).alignment = { horizontal: 'center' };
 
   const headerRowNum = 5;
-  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r), ...(notesFor ? notesFor(r, company) : {}) }));
+  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: peopleLabel(responsiblePeople(r)) || null, ...(notesFor ? notesFor(r, company) : {}) }));
   renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeNotes });
 
   setColumnWidths(sheet, false, includeNotes);
@@ -277,7 +277,7 @@ export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWit
 
   const headerRowNum = 5;
   const rowsForTable = rows.map(r => ({
-    companyName: r.companyName, source: r.qbCompany, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
+    companyName: r.companyName, source: r.qbCompany, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: peopleLabel(responsiblePeople(r)) || null,
     ...(notesFor ? notesFor(r, r.qbCompany) : {}),
   }));
   renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeSource: true, includeNotes });

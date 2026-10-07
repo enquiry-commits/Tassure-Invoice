@@ -19,7 +19,7 @@ check('the owner list is unchanged (still TeamWork + Classes, for the dropdown a
 
 const page = read('app/billing/soa/_components.tsx');
 check('the PIC column shows picShown (book rows and the combined ALL row)', /c\.picShown\.length \? c\.picShown\.map/.test(page) && /combined\.picShown\.length \? combined\.picShown\.map/.test(page) && !/c\.picOptions\.length \? c\.picOptions\.map/.test(page));
-check('the PIC filter offers and matches the people the column shows', /for \(const p of c\.picShown\) names\.add\(p\);/.test(page) && /c\.picShown\.some\(p => selectedSet\.has\(p\)\)/.test(page));
+check('the PIC filter offers and matches the people the column shows (everyone responsible, INV-PIC-011)', /for \(const p of c\.picShown\) names\.add\(p\);/.test(page) && /\(people\.length \? people : c\.picShown\)\.some\(p => selectedSet\.has\(p\)\)/.test(page));
 check('the ALL row merges picShown from its books', /picShown: \[\.\.\.new Set\(group\.rows\.flatMap\(row => row\.picShown\)\)\]/.test(page) && /picShown: \[\.\.\.new Set\(rows\.flatMap\(row => row\.picShown\)\)\]/.test(page));
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);

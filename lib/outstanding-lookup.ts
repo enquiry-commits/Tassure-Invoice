@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createAdminClient } from './supabase';
 import { normalize, resolveCompany, significantWord } from './company-name';
-import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
+import { computeSoaRows, responsiblePeople, peopleLabel, type SoaCompanyRow } from './soa-data';
 import { AGING_BUCKETS, oldestAgingBucket } from './soa';
 import type { QbCompany } from './quickbooks';
 
@@ -101,7 +101,7 @@ export async function lookupOutstandingBalance(companyQuery: string): Promise<Ou
         totalOutstanding: row.totalOutstanding,
         invoiceCount: row.invoiceCount,
         oldestAgingBucketLabel: bucketLabel(oldestAgingBucket(row.aging)),
-        owner: effectiveOwner(row),
+        owner: peopleLabel(responsiblePeople(row)) || null,
         unpaidInvoices: row.unpaidInvoices,
       };
     })
@@ -148,8 +148,8 @@ export async function summarizeOutstandingBalance(qbCompanies: QbCompany[]): Pro
 // summarizeOutstandingBalance's topDebtors deliberately carries no owner
 // (it answers "how big is the book"), so this is a separate, owner-centric
 // view over the SAME computeSoaRows() every other outstanding view uses —
-// with effectiveOwner() (soa_owners override → Class/Location suggestion →
-// sole PIC fallback), the exact ownership rule the page itself applies.
+// with responsiblePeople() (Bad Debt, else everyone the PIC column lists —
+// INV-PIC-011), the exact ownership rule the page itself applies.
 export type CollectionsWorklistRow = {
   qbCompany: QbCompany;
   companyName: string;
@@ -177,7 +177,7 @@ export async function getCollectionsWorklist(ownerQuery: string | null, qbCompan
         totalOutstanding: r.totalOutstanding,
         invoiceCount: r.invoiceCount,
         oldestAgingBucketLabel: bucketLabel(oldestAgingBucket(r.aging)),
-        owner: effectiveOwner(r),
+        owner: peopleLabel(responsiblePeople(r)) || null,
       }));
     }),
   );

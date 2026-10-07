@@ -8,7 +8,7 @@ import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames, staffByTeam } from '@/lib/staff-directory';
 import { findUniqueBestMatch, normalize } from '@/lib/company-name';
-import { effectiveOwner as mainPicFor, derivedOwner, personPick } from '@/lib/soa-main-pic';
+import { responsiblePeople, isBadDebt } from '@/lib/soa-main-pic';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import OutlookHelperReadiness from '@/components/client-communications/OutlookHelperReadiness';
 import type { DraftLike } from '@/lib/draft-helper-client';
@@ -68,8 +68,6 @@ function mergeSameSourceRows(rows: Row[]): Row {
   const mostAdvancedReminder = [...rows].sort((a, b) =>
     (b.reminderProgress.completedStage ?? 0) - (a.reminderProgress.completedStage ?? 0)
       || (b.reminderProgress.completedAt ?? '').localeCompare(a.reminderProgress.completedAt ?? ''))[0];
-  // Only picks a person made in the app count as confirmed (INV-PIC-009).
-  const confirmedOwners = [...new Set(rows.map(row => personPick(row)).filter((owner): owner is string => !!owner))];
   const classOwners = [...new Set(rows.map(row => row.classOwner).filter((owner): owner is string => !!owner))];
   const suggestedOwners = [...new Set(rows.map(row => row.suggestedOwner).filter((owner): owner is string => !!owner))];
 
@@ -77,10 +75,12 @@ function mergeSameSourceRows(rows: Row[]): Row {
     ...rows[0],
     picOptions: [...new Set(rows.flatMap(row => row.picOptions))],
     picShown: [...new Set(rows.flatMap(row => row.picShown))],
-    // TAC ND (INV-PIC-010): only when every merged row is ND and they agree on TAB's Main PIC.
-    ndFollowsTab: rows.every(row => row.ndFollowsTab) && new Set(rows.map(row => row.tabMainPic)).size === 1,
-    soaPic: confirmedOwners.length === 1 ? confirmedOwners[0] : null,
-    soaPicSource: confirmedOwners.length === 1 ? 'person' : null,
+    // TAC ND (INV-PIC-010): only when every merged row is ND; they follow the union of TAB's people.
+    ndFollowsTab: rows.every(row => row.ndFollowsTab),
+    tabPeople: [...new Set(rows.flatMap(row => row.tabPeople))],
+    // Bad Debt is the only stored mark still read (INV-PIC-011).
+    soaPic: rows.some(isBadDebt) ? 'BD' : null,
+    soaPicSource: rows.some(isBadDebt) ? 'person' : null,
     classOwner: classOwners.length === 1 ? classOwners[0] : null,
     suggestedOwner: suggestedOwners.length === 1 ? suggestedOwners[0] : null,
     invoiceCount: rows.reduce((sum, row) => sum + row.invoiceCount, 0),
@@ -134,37 +134,22 @@ const PLACEHOLDER_LABEL_BY_CODE = new Map(PLACEHOLDER_OWNER_CODES.map(p => [p.co
 // selected as this row's current value under "Associated with this company".
 const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value) ?? value;
 
-function SoaOwnerSelect({ row, onChange }: { row: Row; onChange: (value: string) => void }) {
-  // The shared Main PIC rule (lib/soa-main-pic.ts, INV-PIC-009).
-  const displayedOwner = mainPicFor(row);
-  const isConfirmed = !!personPick(row);
-  const likely = displayedOwner && !row.picOptions.includes(displayedOwner)
-    ? [displayedOwner, ...row.picOptions] : row.picOptions;
-  const likelySet = new Set(likely);
-  const everyoneElse = allStaffNames().filter(name => !likelySet.has(name)).sort();
-  const placeholders = PLACEHOLDER_OWNER_CODES.filter(item => !likelySet.has(item.code));
-
-  return (
-    <select value={displayedOwner ?? ''} onChange={event => onChange(event.target.value)}
-      title={!isConfirmed && row.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
-      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
-      <option value="">Choose Main PIC…</option>
-      {likely.length > 0 ? (
-        <>
-          <optgroup label="Associated with this company">
-            {likely.map(name => <option key={name} value={name}>{ownerOptionLabel(name)}</option>)}
-          </optgroup>
-          <optgroup label="All staff">
-            {everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
-          </optgroup>
-        </>
-      ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
-      {placeholders.length > 0 && (
-        <optgroup label="Other">
-          {placeholders.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}
-        </optgroup>
-      )}
-    </select>
+// Bad Debt is the only mark left on a row (INV-PIC-011 — there is no Main PIC any more): the people the
+// PIC column lists are all responsible. A write-off is a big step, so marking asks first.
+function BadDebtToggle({ row, onChange }: { row: Row; onChange: (value: string) => void }) {
+  const bad = isBadDebt(row);
+  return bad ? (
+    <button type="button" title="Click to remove the Bad Debt mark"
+      onClick={event => { event.stopPropagation(); onChange(''); }}
+      style={{ marginTop: 4, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', borderRadius: 5, padding: '1px 7px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>
+      Bad Debt ×
+    </button>
+  ) : (
+    <button type="button" title="Mark this balance as Bad Debt"
+      onClick={event => { event.stopPropagation(); if (window.confirm(`Mark ${row.companyName} as Bad Debt?`)) onChange('BD'); }}
+      style={{ marginTop: 4, border: 'none', background: 'transparent', color: '#94a3b8', padding: 0, fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>
+      + Bad Debt
+    </button>
   );
 }
 
@@ -678,8 +663,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // Multi-source companies edit the company-level note on the parent summary row,
   // while expanded child rows leave this column clean and blank.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(210px,1.25fr) 140px 110px 95px 95px 95px 95px 95px 105px 95px 145px 160px 36px'
-    : '32px minmax(230px,1.4fr) 140px 95px 95px 95px 95px 95px 105px 95px 145px 160px 36px';
+    ? '32px minmax(210px,1.25fr) 140px 110px 95px 95px 95px 95px 95px 105px 150px 160px 36px'
+    : '32px minmax(230px,1.4fr) 140px 95px 95px 95px 95px 95px 105px 150px 160px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -736,7 +721,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // real default the moment QuickBooks itself carries the signal, no manual
   // pick required first. A confirmed soa_owners pick (soaPic) still wins
   // when one exists — it's a human override, not just a smarter guess.
-  const effectiveOwner = (c: SoaCompanyRow): string | null => derivedOwner(c); // shared rule, INV-PIC-009
+  const peopleOf = (c: SoaCompanyRow): string[] => responsiblePeople(c); // shared rule, INV-PIC-011
 
   // Vincent, 2026-09-06: "我选择某个PIC,她就能看到和自己相关的所有欠款公司" —
   // a person's own book is everything where she's the confirmed Owner, the
@@ -748,8 +733,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const picFilterOptions = useMemo(() => {
     const names = new Set<string>();
     for (const c of companies ?? []) {
-      const owner = effectiveOwner(c);
-      if (owner) names.add(owner);
+      for (const p of peopleOf(c)) names.add(p);
       for (const p of c.picShown) names.add(p);
     }
     // Vincent, 2026-09-23: "BD" (Bad Debt — a write-off marker, not a real
@@ -846,15 +830,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     // tag (TASSURE ASIA OUTSOURCEZ PTE LTD $16,377.25, WOLVEZ CAPITAL PTE.
     // LTD. $4,450) — see PROJECT_STATUS.md's 2026-09-28 entry for the full
     // list; those may need a Main PIC assigned rather than staying hidden.
-    const hasAnyPic = (c: Row) => c.picOptions.length > 0 || !!effectiveOwner(c);
+    const hasAnyPic = (c: Row) => c.picOptions.length > 0 || peopleOf(c).length > 0;
     // 2026-10-07, Vincent: a NEGATIVE net now shows (red) so overpayments are visible; Total = 0 stays hidden as
     // decided on 2026-09-16. Still recomputed live every render.
     const list = (companies ?? []).filter(c => c.totalOutstanding !== 0 && hasAnyPic(c));
     if (!picFilters.length) return list;
     const selectedSet = new Set(picFilters);
+    // EVERYONE the PIC column lists is responsible — picking any one of them shows the company (INV-PIC-011).
     const ownsRow = (c: Row) => {
-      const owner = effectiveOwner(c);
-      return owner ? selectedSet.has(owner) : c.picShown.some(p => selectedSet.has(p));
+      const people = peopleOf(c);
+      return (people.length ? people : c.picShown).some(p => selectedSet.has(p));
     };
     // Vincent, 2026-09-23, on the "All" view specifically: "当一家公司有好
     // 几个Source, 大家都有责任一起去追这个公司其他Source的欠款" — filtering
@@ -1104,9 +1089,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
           {/* QuickBooks' own PIC (invoice Classes), else TeamWork's — INV-PIC-008 */}
           {c.picShown.length ? c.picShown.map(name => <div key={name}>{name}</div>) : '—'}
-        </div>
-        <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
-          <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
+          <BadDebtToggle row={c} onChange={value => updateSoaPic(c, value)} />
         </div>
         {opts.child ? (
           <div style={{ padding: '0 6px' }} />
@@ -1249,8 +1232,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
-                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
+                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Remarks', '']
+                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Remarks', '']
               ).map((h, i, all) => {
                 const isCenter = h !== '' && h !== 'Company Name' && h !== 'Remarks';
                 // Last column (the Mail-icon header slot, always blank) is
@@ -1286,7 +1269,6 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   picShown: [...new Set(group.rows.flatMap(row => row.picShown))],
                   reminderProgress: earliestNext.reminderProgress,
                 };
-                const owners = [...new Set(group.rows.map(effectiveOwner).filter((owner): owner is string => !!owner))];
                 const draftScope: SoaCompanySelector = group.rows.length > 1 ? 'ALL' : rowCompany(group.rows[0]);
                 // Why a book's pill is red — the single-row badge always showed
                 // it on hover; the grouped one only turned red (2026-10-05).
@@ -1395,16 +1377,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
+                        {group.rows.length === 1
+                          ? <BadDebtToggle row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
+                          : group.rows.some(isBadDebt) && <div style={{ marginTop: 4, fontSize: 10, fontWeight: 800, color: 'var(--status-danger)' }}>Bad Debt: {group.rows.filter(isBadDebt).map(rowCompany).join(' + ')}</div>}
                       </div>
-                      {group.rows.length === 1 ? (
-                        <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
-                          <SoaOwnerSelect row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
-                          {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
-                        </div>
-                      )}
                       <div style={{ padding: '0 6px' }} onClick={event => event.stopPropagation()}>
                         <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
                       </div>

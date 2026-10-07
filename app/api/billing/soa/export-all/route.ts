@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
-import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
+import { computeSoaRows, responsiblePeople, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { buildAllSheet, buildCompanySheet, type SoaNotesFor } from '@/lib/soa-export';
 import { peopleWithBooks, personLabel, rowsInPersonBook, sheetNameForPerson } from '@/lib/soa-person-book';
 import { loadSoaReminderHistory, resolveSoaReminderProgress } from '@/lib/soa-reminder-progress';
@@ -63,7 +63,7 @@ export async function GET() {
   // Same rule as app/billing/soa/_components.tsx's hasAnyPic; still a live
   // filter, so a company reappears once it gets a PIC.
   // 2026-10-07: a NEGATIVE net (the client overpaid — we owe it) is listed too, as a negative; a net of exactly 0 stays out.
-  const visible = (r: SoaCompanyRow) => r.totalOutstanding !== 0 && (r.picOptions.length > 0 || !!effectiveOwner(r));
+  const visible = (r: SoaCompanyRow) => r.totalOutstanding !== 0 && (r.picOptions.length > 0 || responsiblePeople(r).length > 0);
   tab = tab.filter(visible);
   tac = tac.filter(visible);
   tao = tao.filter(visible);

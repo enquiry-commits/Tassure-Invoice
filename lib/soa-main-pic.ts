@@ -1,31 +1,19 @@
-// The SOA "Main PIC" rule — ONE copy for the server (lib/soa-data.ts, My
-// Tasks, exports, Company 360, the assistant) and the SOA page's own dropdown
-// and filters, which used to carry their own copies (docs/INVARIANTS.md
-// INV-PIC-009). Pure: safe in the browser.
+// WHO IS RESPONSIBLE for an SOA row — ONE copy for the server (lib/soa-data.ts, My Tasks, exports, Company
+// 360, the assistant) and the SOA page's filters (docs/INVARIANTS.md INV-PIC-011). Pure: safe in the browser.
 //
-// Vincent, 2026-10-07, on FINSIGHTS MEDIA: "TAB 的 PIC 已经变成默认是 Jenny
-// 了 那么Main PIC 也应该是默认是 Jenny, 而不是还放着 Kah yE". Its "Chin Kah Ye"
-// was a soa_owners row written by the one-off 2026-09-07 Google-Sheet import
-// (updated_by_email 'backfill@internal' — 305 of the table's 308 rows), not a
-// pick anyone made in the app, yet it beat QuickBooks' own Class. Then:
-// "最新一轮的直接按照系统逻辑走了，以后要手动才手动，现在先全部走一轮系统匹配
-// Main PIC" — so the import no longer names an owner. Order now:
-//   1. a pick a PERSON made in this app (always wins), or a stored STATUS
-//      code such as "BD" (Bad Debt) — a status, not a person, kept even when
-//      the import wrote it (3 owing companies carry it);
-//   2. the person QuickBooks' own Classes name (the PIC column's source);
-//   3. the PIC column's only person (Main PIC follows the PIC column);
-//   4. the auto-suggestion — the invoice Location, i.e. who keyed it — only
-//      when the PIC column can't decide (several people, or none);
-//   5. a lone TeamWork PIC (effectiveOwner only).
-// The import rows stay in soa_owners untouched (nothing is deleted).
+// Vincent, 2026-10-07, on CO-OPERATE ASSOCIATES (PIC column: Ang Shi Ming, Jay Tay, Clarence Saw): "过后就没有
+// Main PIC 了 … PIC 就是 Main PIC … 3 个人都是 MAIN PIC，不管我在上面选择 3 个人的其中一个人，这个公司都要出现".
+// This REPLACES the single-person "Main PIC" rule of INV-PIC-009 (same day): there is no Main PIC any more —
+// everyone the PIC column lists is responsible, and picking any ONE of them shows the company.
 //
-// TAC Nominee Director rows (INV-PIC-010) — Vincent, 2026-10-07: "TAC一般都是
-// ND 服务，而ND服务 我们都不会放PIC是谁的…TAC的PIC 那边就放 - ， 而TAC 的MAIN
-// PIC 就放成和TAB 的 MAIN PIC 一样". When EVERY unpaid TAC invoice line is a
-// Nominee Director service (ndFollowsTab, set in lib/soa-data.ts), the Main
-// PIC is step 1, else the same company's TAB Main PIC (tabMainPic) — and
-// nothing else: no TAB answer means empty, never the person who keyed it.
+// Who is responsible, in order:
+//   1. "BD" (Bad Debt) — a stored STATUS, not a person, kept even when the Sept import wrote it ("BD 保留"). It
+//      is the only stored value still read; any other soa_owners pick is ignored (Vincent chose that).
+//   2. a TAC row whose unpaid invoices are ALL Nominee Director services (INV-PIC-010) has no PIC of its own:
+//      it is the responsibility of the same company's TAB people (tabPeople);
+//   3. everyone in the PIC column (picShown, INV-PIC-008: QuickBooks' Classes on the unpaid invoices, else the
+//      company's TeamWork PIC);
+//   4. nobody there: the invoice Location's suggestion (who keyed it), so a company is not left unowned.
 
 export type MainPicRow = {
   soaPic: string | null;
@@ -35,11 +23,10 @@ export type MainPicRow = {
   picShown: string[];
   picOptions: string[];
   ndFollowsTab: boolean;
-  tabMainPic: string | null;
+  tabPeople: string[];
 };
 
-// Stored values that are a status, not a person (the SOA page's "Other"
-// options) — honoured whoever stored them.
+// Stored values that are a status, not a person.
 const STATUS_CODES = new Set(['BD']);
 
 export function storedOwnerSource(updatedByEmail: string | null | undefined): 'person' | 'import' {
@@ -53,19 +40,20 @@ export function classOwnerFor(suggestedOwner: string | null, fromInvoices: reado
   return fromInvoices.length === 1 ? fromInvoices[0] : null;
 }
 
-// The stored value that still counts: a person's pick in this app, or a status code.
-export function personPick(row: Pick<MainPicRow, 'soaPic' | 'soaPicSource'>): string | null {
-  if (!row.soaPic) return null;
-  return row.soaPicSource === 'person' || STATUS_CODES.has(row.soaPic) ? row.soaPic : null;
+/** True when this balance carries the Bad Debt status (whoever stored it). */
+export function isBadDebt(row: Pick<MainPicRow, 'soaPic'>): boolean {
+  return !!row.soaPic && STATUS_CODES.has(row.soaPic);
 }
 
-// Steps 1-4 (no lone-TeamWork fallback) — what the SOA page's filters use.
-export function derivedOwner(row: Pick<MainPicRow, 'soaPic' | 'soaPicSource' | 'classOwner' | 'suggestedOwner' | 'picShown' | 'ndFollowsTab' | 'tabMainPic'>): string | null {
-  if (row.ndFollowsTab) return personPick(row) ?? row.tabMainPic;
-  return personPick(row) ?? row.classOwner ?? (row.picShown.length === 1 ? row.picShown[0] : null) ?? row.suggestedOwner;
+/** Everyone responsible for this row (see the order above); 'BD' means Bad Debt, not a person. */
+export function responsiblePeople(row: Pick<MainPicRow, 'soaPic' | 'suggestedOwner' | 'picShown' | 'ndFollowsTab' | 'tabPeople'>): string[] {
+  if (isBadDebt(row)) return ['BD'];
+  if (row.ndFollowsTab) return [...row.tabPeople];
+  if (row.picShown.length) return [...new Set(row.picShown)];
+  return row.suggestedOwner ? [row.suggestedOwner] : [];
 }
 
-export function effectiveOwner(row: MainPicRow): string | null {
-  if (row.ndFollowsTab) return derivedOwner(row);
-  return derivedOwner(row) ?? (row.picOptions.length === 1 ? row.picOptions[0] : null);
+/** For display: "Ang Shi Ming, Jay Tay" (BD reads "Bad Debt"). */
+export function peopleLabel(people: readonly string[]): string {
+  return people.map(p => (p === 'BD' ? 'Bad Debt' : p)).join(', ');
 }

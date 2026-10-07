@@ -1,7 +1,7 @@
 import { AlertTriangle, Calendar, FileText, Receipt, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
 import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
-import { effectiveOwner } from '@/lib/soa-data';
+import { responsiblePeople, peopleLabel } from '@/lib/soa-data';
 import { AGING_BUCKETS, TXN_TYPE_TAGS, oldestAgingBucket } from '@/lib/soa';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { SoaSourceBadgeButton } from '@/components/billing/SoaDownloadPopover';
@@ -278,7 +278,7 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
 // 2026-09-15: "Owner" header renamed to "Main PIC" (Vincent: "换成类似于
 // Main PIC会不会比较好呢" — "Owner" read oddly for what's really "the one
 // person assigned to this company's collections"). Display label only —
-// effectiveOwner() and every underlying field/table name are unchanged.
+// responsiblePeople() (INV-PIC-011) now supplies it: everyone the PIC column lists.
 //
 // 2026-09-23: "Company" reverted back to "Source", and the value itself
 // became a clickable badge — Vincent: "我要把后面的两个按钮置入到 Company
@@ -380,7 +380,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                   one lines up with line i of the other. */}
               {r.lineItems.length ? r.lineItems.map((item, idx) => <div key={`${item.txnType}-${item.docNumber}-${idx}`}>{fmtDate(item.dueDate)}</div>) : '—'}
             </div>
-            <div style={{ fontSize: 11, color: effectiveOwner(r) ? '#1e3a5f' : '#94a3b8' }}>{effectiveOwner(r) || '—'}</div>
+            <div style={{ fontSize: 11, color: responsiblePeople(r).length ? '#1e3a5f' : '#94a3b8' }}>{peopleLabel(responsiblePeople(r)) || '—'}</div>
           </div>
         );
       })}

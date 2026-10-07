@@ -4,7 +4,7 @@ import { createAdminClient } from './supabase';
 import { todaySGT, thisYearSGT } from './date';
 import { findStaffEmails } from './staff-directory';
 import { normalize } from './company-name';
-import { computeAllSoaRows, effectiveOwner } from './soa-data';
+import { computeAllSoaRows, responsiblePeople, peopleLabel } from './soa-data';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
 import { loadSoaRemarks, soaRemarksForCompany } from './soa-remarks';
 import { getTrademarkSummary } from './trademark-lookup';
@@ -28,7 +28,7 @@ import type { QbCompany } from './quickbooks';
 // (dedicated PIC table, added 2026-09-06) and `companies.pic`/`sec_pic`
 // (already the established fallback-PIC pattern — see INV-DATA-049). Added
 // SOA collections (real money owed, attributed via the exact same
-// `effectiveOwner()` the SOA pages themselves show as "Owner" — never a
+// `responsiblePeople()` the SOA pages themselves use — everyone the PIC column lists, never a
 // new rule) and Trademark renewals (attributed via the same
 // company_name→companies.pic join Late Filing's own PIC fallback already
 // uses, `getTrademarkSummary()`'s own existing 180-day "expiring soon"
@@ -192,10 +192,9 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
     lateFiling = { needsAttention };
   }
 
-  // SOA collections — attributed via effectiveOwner(), the EXACT function
-  // the SOA pages themselves use to decide what "Owner" column to show
-  // (soaPic human override, else suggestedOwner computed from real invoice
-  // Class/Location, else the single-PIC fallback) — never a new rule.
+  // SOA collections — attributed via responsiblePeople(), the EXACT function
+  // the SOA pages themselves use (INV-PIC-011): EVERYONE the PIC column lists
+  // is responsible, so each of them sees the company here — never a new rule.
   // computeAllSoaRows() is the one shared computation 6+ other SOA-facing
   // features already fan out from (docs/FEATURE_MAP.md), so this can never
   // silently disagree with what the SOA/Outstanding pages themselves show.
@@ -203,9 +202,10 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   if (showSoa) {
     const [allSoaRows, reminderHistory, soaRemarks] = await Promise.all([computeAllSoaRows(), loadSoaReminderHistory(supabase), loadSoaRemarks(supabase)]);
     soaCollections = allSoaRows
-      .filter(row => row.totalOutstanding > 0 && findStaffEmails(effectiveOwner(row)).includes(account.email))
+      // EVERYONE responsible (the PIC column's people) gets the chase on their list (INV-PIC-011)
+      .filter(row => row.totalOutstanding > 0 && responsiblePeople(row).some(person => findStaffEmails(person).includes(account.email)))
       .map(row => ({
-        companyName: row.companyName, qbCompany: row.qbCompany, totalOutstanding: row.totalOutstanding, owner: effectiveOwner(row),
+        companyName: row.companyName, qbCompany: row.qbCompany, totalOutstanding: row.totalOutstanding, owner: peopleLabel(responsiblePeople(row)) || null,
         reminderProgress: resolveSoaReminderProgress(reminderHistory, row, row.qbCompany),
         remarks: soaRemarksForCompany(soaRemarks, row.companyName),
       }))

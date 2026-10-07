@@ -7,7 +7,7 @@ import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
 import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
 import { computeSuggestedOwner, collectInvolvedStaff, picAllowedForCompany, type OwnerInvoiceSignal } from './soa-owner';
-import { storedOwnerSource, classOwnerFor, effectiveOwner } from './soa-main-pic';
+import { storedOwnerSource, classOwnerFor, responsiblePeople } from './soa-main-pic';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
 // GET /api/billing/soa/export (the Excel download) so the two can never
@@ -51,15 +51,16 @@ export interface SoaCompanyRow {
   // Kah Ye from TeamWork): the QuickBooks Classes on THIS book's unpaid
   // invoices; the company's TeamWork PIC only when none of them carries a
   // Class ("退回公司资料里的负责人" — TAC's ND invoices mostly have none).
-  // Display and the PIC filter only: picOptions, the owner dropdown and
-  // effectiveOwner are unchanged. See picShownFor. Empty on a TAC
+  // These are the people responsible for the row (responsiblePeople,
+  // INV-PIC-011 — there is no Main PIC any more). See picShownFor. Empty on a TAC
   // Nominee Director row (ndFollowsTab — "ND服务 我们都不会放PIC是谁的").
   picShown: string[];
   // TAC only (INV-PIC-010): every unpaid TAC invoice line is a Nominee
-  // Director service, so the Main PIC follows the same company's TAB Main
-  // PIC (tabMainPic) — see lib/soa-main-pic.ts and attachTabMainPic below.
+  // Director service, so the people responsible are the same company's TAB
+  // people (tabPeople) — see lib/soa-main-pic.ts and attachTabMainPic below.
   ndFollowsTab: boolean;
-  tabMainPic: string | null;
+  // The same company's TAB people (responsiblePeople of its TAB row) — read only when ndFollowsTab.
+  tabPeople: string[];
   // Chelsea's manual pick, from soa_owners (keyed by normalized customer
   // name + qb_company, NOT companies.id — see that table's own migration
   // comments: 18% of real customers with a balance have no matching
@@ -281,7 +282,7 @@ export function picShownFor(fromInvoices: readonly string[], fromCompanies: read
 }
 
 // Main PIC rule: lib/soa-main-pic.ts (one copy, shared with the SOA page — INV-PIC-009).
-export { effectiveOwner } from './soa-main-pic';
+export { responsiblePeople, peopleLabel, isBadDebt } from './soa-main-pic';
 
 export type SoaRowsOptions = {
   customerNamePrefilter?: string;
@@ -314,11 +315,11 @@ async function loadNdOnlyInvoiceIds(invoiceIds: string[]): Promise<Set<string>> 
   return new Set([...ndByInvoice].filter(([, nd]) => nd).map(([id]) => id));
 }
 
-// Each TAC ND row's tabMainPic: the same company's TAB SOA row's Main PIC
-// (matched the way the SOA page's ALL view groups a company — normalized
-// company name). No TAB row (nothing owed on TAB): what TAB's Main PIC is
-// with no invoices — a TAB pick a person made (or BD), else the TeamWork
-// PIC's one TAB-team person; otherwise empty ("用 TAB 那边的负责人").
+// Each TAC ND row's tabPeople: the people responsible for the same company's
+// TAB SOA row (matched the way the SOA page's ALL view groups a company —
+// normalized company name). No TAB row (nothing owed on TAB): what TAB's
+// responsible people are with no invoices — Bad Debt if TAB is marked, else
+// the TeamWork PIC's TAB-team people; otherwise empty ("用 TAB 那边的负责人").
 async function attachTabMainPic(rows: SoaCompanyRow[], qbKeyByRow: Map<SoaCompanyRow, string>, opts?: SoaRowsOptions): Promise<void> {
   const ndRows = rows.filter(row => row.ndFollowsTab);
   if (!ndRows.length) return;
@@ -337,13 +338,11 @@ async function attachTabMainPic(rows: SoaCompanyRow[], qbKeyByRow: Map<SoaCompan
 
   for (const row of ndRows) {
     const tab = tabByKey.get(normalize(row.companyName));
-    if (tab) { row.tabMainPic = effectiveOwner(tab); continue; }
+    if (tab) { row.tabPeople = responsiblePeople(tab); continue; }
     const stored = tabPicks.get(normalize(row.companyName)) ?? tabPicks.get(qbKeyByRow.get(row) ?? '');
     const teamWork = formatStaffNameList(row.pic).filter(name => picAllowedForCompany(name, 'TAB'));
-    row.tabMainPic = effectiveOwner({
-      soaPic: stored?.pic ?? null, soaPicSource: stored?.pic ? stored.source : null,
-      classOwner: null, suggestedOwner: null, picShown: teamWork, picOptions: teamWork,
-      ndFollowsTab: false, tabMainPic: null,
+    row.tabPeople = responsiblePeople({
+      soaPic: stored?.pic ?? null, suggestedOwner: null, picShown: teamWork, ndFollowsTab: false, tabPeople: [],
     });
   }
 }
@@ -490,7 +489,7 @@ export async function computeSoaRows(company: QbCompany, opts?: SoaRowsOptions):
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
       ndFollowsTab,
-      tabMainPic: null,
+      tabPeople: [],
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
       classOwner: classOwnerFor(suggestedOwner, picFromInvoices),
@@ -648,7 +647,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: SoaRowsOptions): 
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
       ndFollowsTab,
-      tabMainPic: null,
+      tabPeople: [],
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
       classOwner: classOwnerFor(suggestedOwner, picFromInvoices),

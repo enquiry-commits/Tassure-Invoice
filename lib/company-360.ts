@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, matchScore, significantWord, closestNearMiss } from './company-name';
-import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
+import { computeSoaRows, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
 import { loadCurrentQbValues, withCurrentQbValues } from './current-invoice-values';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';

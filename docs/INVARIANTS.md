@@ -765,7 +765,7 @@ again.
   (INV-PIC-007, soa_owners) are untouched. Live check: TAB 129 of 225 owing
   rows narrower (ACN → Ang Shi Ming), TAC 13 of 52, TAO 0; no row newly
   empty. `test-soa-pic-column.ts`.
-- **INV-PIC-009** — SOA Main PIC follows the system, not the 2026-09-07
+- **INV-PIC-009** — *(SUPERSEDED the same day by INV-PIC-011: there is no Main PIC any more; kept for the history of why the Sept import is ignored.)* SOA Main PIC follows the system, not the 2026-09-07
   Google-Sheet import. ONE rule, `lib/soa-main-pic.ts` (server re-exports
   `effectiveOwner`; the SOA page's dropdown and filters import it — they
   had their own copies): (1) a pick a PERSON made in the app, or a stored
@@ -822,6 +822,31 @@ again.
   `test-soa-main-pic.ts`.
 ## Recipient / CC / email address (INV-MAIL)
 
+
+- **INV-PIC-011** — There is NO Main PIC: everyone the SOA PIC column lists is
+  responsible for the row, and picking ANY ONE of them in the people filter
+  shows the company. Vincent, 2026-10-07, on CO-OPERATE ASSOCIATES (PIC:
+  Ang Shi Ming, Jay Tay, Clarence Saw): "过后就没有 Main PIC 了 … PIC 就是
+  Main PIC … 3 个人都是 MAIN PIC，不管我在上面选择 3 个人的其中一个人这个公司
+  都要出现". Replaces the single-person rule of INV-PIC-009. ONE rule,
+  `responsiblePeople()` in `lib/soa-main-pic.ts`, in this order: (1) a stored
+  "BD" (Bad Debt) status — the only stored `soa_owners` value still read
+  (whoever stored it; Vincent: "保留 Bad Debt 标记，其他人工选的不再使用"); the 5
+  picks people made and the 303 import rows stay in the table, untouched and
+  ignored; (2) a TAC row whose unpaid invoices are ALL Nominee Director
+  services (INV-PIC-010) → the same company's TAB people (`tabPeople`);
+  (3) everyone in the PIC column (`picShown`, INV-PIC-008); (4) nobody there →
+  the invoice Location's suggestion, so a company is not left unowned. Used
+  by: the SOA page's filters (the Main PIC column and its dropdown are gone;
+  a small "Bad Debt" mark remains on the PIC cell), My Tasks' SOA Collections
+  (EVERY responsible person gets the chase), the assistant's outstanding
+  lookups, Company 360, and the Excel (the PIC column prints all the people;
+  one sheet per person via `lib/soa-person-book.ts`, the whole client card
+  kept). Collections still skip clients that overpaid (INV-DATA-078).
+  Live check 2026-10-07: CO-OPERATE's three people each see it on the page
+  rule, in My Tasks and on their own sheet; of 492 rows 53 have more than one
+  responsible person, 4 are Bad Debt. Guarded by `test-soa-main-pic.ts`,
+  `test-soa-person-book.ts`, `test-soa-pic-column.ts`.
 - **INV-MAIL-001** — Canonical recipient policy (`lib/campaign-recipients.ts`):
   external addresses → To; Tassure-domain addresses → CC; always exclude
   `cindy@tassure.com` (both aliases); always add `hoechyi@tassure.com` to CC
