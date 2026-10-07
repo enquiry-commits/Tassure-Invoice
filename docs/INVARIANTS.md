@@ -838,7 +838,7 @@ again.
   (3) everyone in the PIC column (`picShown`, INV-PIC-008); (4) nobody there →
   the invoice Location's suggestion, so a company is not left unowned. Used
   by: the SOA page's filters (the Main PIC column and its dropdown are gone;
-  a small "Bad Debt" mark remains on the PIC cell), My Tasks' SOA Collections
+  Bad Debt is chosen from a small dropdown on the Remarks box, which stays free text), My Tasks' SOA Collections
   (EVERY responsible person gets the chase), the assistant's outstanding
   lookups, Company 360, and the Excel (the PIC column prints all the people;
   one sheet per person via `lib/soa-person-book.ts`, the whole client card

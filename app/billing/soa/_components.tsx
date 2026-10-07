@@ -134,26 +134,15 @@ const PLACEHOLDER_LABEL_BY_CODE = new Map(PLACEHOLDER_OWNER_CODES.map(p => [p.co
 // selected as this row's current value under "Associated with this company".
 const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value) ?? value;
 
-// Bad Debt is the only mark left on a row (INV-PIC-011 — there is no Main PIC any more): the people the
-// PIC column lists are all responsible. A write-off is a big step, so marking asks first.
-function BadDebtToggle({ row, onChange }: { row: Row; onChange: (value: string) => void }) {
-  const bad = isBadDebt(row);
-  return bad ? (
-    <button type="button" title="Click to remove the Bad Debt mark"
-      onClick={event => { event.stopPropagation(); onChange(''); }}
-      style={{ marginTop: 4, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', borderRadius: 5, padding: '1px 7px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>
-      Bad Debt ×
-    </button>
-  ) : (
-    <button type="button" title="Mark this balance as Bad Debt"
-      onClick={event => { event.stopPropagation(); if (window.confirm(`Mark ${row.companyName} as Bad Debt?`)) onChange('BD'); }}
-      style={{ marginTop: 4, border: 'none', background: 'transparent', color: '#94a3b8', padding: 0, fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>
-      + Bad Debt
-    </button>
-  );
-}
-
-function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (value: string) => Promise<void> }) {
+// Remarks are free text; the small arrow on the right also offers "Bad Debt" (Vincent, 2026-10-07: "Bad Debt 放在
+// Remarks 的下拉选项…如果要选择 Bad Debt 就点击下拉选择"). Bad Debt is the only mark left on a row (INV-PIC-011 — there
+// is no Main PIC any more). `badDebtLabel` is null when not marked, else the text of the red tag ("Bad Debt", or
+// "Bad Debt (TAB)" when only some sources of the company are). The dropdown is a native <select> laid invisibly over
+// the arrow, so its list opens reliably outside the scrolling table.
+function SoaRemarksInput({ value, onSave, badDebtLabel, onBadDebtChange }: {
+  value: string | null; onSave: (value: string) => Promise<void>;
+  badDebtLabel?: string | null; onBadDebtChange?: (bad: boolean) => void;
+}) {
   const [val, setVal] = useState(value ?? '');
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -189,29 +178,53 @@ function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (val
   };
 
   return (
-    <textarea
-      ref={textareaRef}
-      value={val}
-      rows={1}
-      disabled={saving}
-      onChange={e => {
-        setVal(e.target.value);
-        resizeTextarea();
-      }}
-      onBlur={() => void save()}
-      onKeyDown={e => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.currentTarget.blur();
-        }
-        if (e.key === 'Escape') {
-          setVal(value ?? '');
-          e.currentTarget.blur();
-        }
-      }}
-      placeholder="Add remarks…"
-      aria-label="SOA remarks"
-      className="soa-remarks-input"
-    />
+    <div>
+      {badDebtLabel && (
+        <div style={{ display: 'inline-block', marginBottom: 3, padding: '1px 7px', borderRadius: 5, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10, fontWeight: 800 }}>
+          {badDebtLabel}
+        </div>
+      )}
+      <div style={{ position: 'relative' }}>
+        <textarea
+          ref={textareaRef}
+          value={val}
+          rows={1}
+          disabled={saving}
+          onChange={e => {
+            setVal(e.target.value);
+            resizeTextarea();
+          }}
+          onBlur={() => void save()}
+          onKeyDown={e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.currentTarget.blur();
+            }
+            if (e.key === 'Escape') {
+              setVal(value ?? '');
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="Add remarks…"
+          aria-label="SOA remarks"
+          className="soa-remarks-input"
+          style={onBadDebtChange ? { paddingRight: 26 } : undefined}
+        />
+        {onBadDebtChange && (
+          <>
+            <ChevronDown size={13} aria-hidden style={{ position: 'absolute', right: 8, top: 10, color: '#94a3b8', pointerEvents: 'none' }} />
+            <select
+              aria-label="Mark this balance"
+              title="Mark as Bad Debt"
+              value={badDebtLabel ? 'BD' : ''}
+              onChange={e => onBadDebtChange(e.target.value === 'BD')}
+              style={{ position: 'absolute', right: 0, top: 0, width: 26, height: 32, opacity: 0, cursor: 'pointer' }}>
+              <option value="">Remarks only</option>
+              <option value="BD">Bad Debt</option>
+            </select>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1090,13 +1103,14 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
           {/* QuickBooks' own PIC (invoice Classes), else TeamWork's — INV-PIC-008 */}
           {c.picShown.length ? c.picShown.map(name => <div key={name}>{name}</div>) : '—'}
-          <BadDebtToggle row={c} onChange={value => updateSoaPic(c, value)} />
         </div>
         {opts.child ? (
           <div style={{ padding: '0 6px' }} />
         ) : (
           <div style={{ padding: '0 6px' }} onClick={event => event.stopPropagation()}>
-            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
+            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)}
+              badDebtLabel={isBadDebt(c) ? 'Bad Debt' : null}
+              onBadDebtChange={bad => updateSoaPic(c, bad ? 'BD' : '')} />
           </div>
         )}
         {/* Sticky to the scroll container's right edge — same fix and
@@ -1378,12 +1392,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
-                        {group.rows.length === 1
-                          ? <BadDebtToggle row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
-                          : group.rows.some(isBadDebt) && <div style={{ marginTop: 4, fontSize: 10, fontWeight: 800, color: 'var(--status-danger)' }}>Bad Debt: {group.rows.filter(isBadDebt).map(rowCompany).join(' + ')}</div>}
                       </div>
                       <div style={{ padding: '0 6px' }} onClick={event => event.stopPropagation()}>
-                        <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
+                        {(() => {
+                          // The Remarks box is the company's (shared across its books), so the Bad Debt choice applies to
+                          // every book of the company; the tag names the books when only some are marked.
+                          const marked = group.rows.filter(isBadDebt);
+                          const label = !marked.length ? null : marked.length === group.rows.length ? 'Bad Debt' : `Bad Debt (${marked.map(rowCompany).join(' + ')})`;
+                          return <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)}
+                            badDebtLabel={label} onBadDebtChange={bad => group.rows.forEach(r => updateSoaPic(r, bad ? 'BD' : ''))} />;
+                        })()}
                       </div>
                       {/* Sticky to the scroll container's right edge — 2026-09-23,
                           Vincent: this is the LAST column of a wide fixed-width
