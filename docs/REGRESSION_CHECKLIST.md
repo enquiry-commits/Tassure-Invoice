@@ -455,7 +455,9 @@ has been run, signed in: (1) ask the assistant one question —
 `turn_key`, the model, non-zero tokens and a `cost_usd`. (2) ask one under
 View As — `actor_email` is still you, `subject_email` the viewed person.
 (3) open My Tasks with tasks on it — one `my_tasks_brief` row, trigger
-`auto`, under you. (4) compare one day's total with the Anthropic/OpenAI
+`auto`, with you as `actor_email`; on Admin › AI Usage it counts under 系统
+(not under you, and not under the colleague whose page you viewed), shown
+as "给 <name>" (INV-AI-010, 2026-10-07). (4) compare one day's total with the Anthropic/OpenAI
 consoles for the same day; a real gap means a call path isn't recorded
 (or requests are timing out). (5) as Vincent, open Admin › AI Usage — the
 calls from (1)–(3) are there under the right person within 30 seconds (the

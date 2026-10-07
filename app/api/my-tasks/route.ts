@@ -89,9 +89,10 @@ export async function GET(req: NextRequest) {
   // already degrades to a rule-based sentence internally, but this is a
   // last-resort guard against something unexpected (e.g. a network error
   // mid-fallback) so My Tasks itself still loads either way.
-  // The brief's Claude call counts under the person who opened the page,
-  // marked automatic (Vincent, 2026-10-05: "算本人，单独标「自动」"); under
-  // View As, the viewed account is noted beside them (INV-AI-010).
+  // The brief's Claude call is recorded with who opened the page and, under
+  // View As, whose page it was — but the AI usage page counts it as the
+  // SYSTEM's, never the person's (Vincent, 2026-10-07: "My Tasks 提醒的 token
+  // 全部算系统的"; SYSTEM_OWNED_FEATURES in lib/ai/usage-report.ts, INV-AI-010).
   const brief = await generateMyTasksBrief(tasks, account.name, {
     feature: 'my_tasks_brief', trigger: 'auto', actorEmail: realAccount.email, subjectEmail: viewingAs?.email ?? null,
   }).catch(() => null);

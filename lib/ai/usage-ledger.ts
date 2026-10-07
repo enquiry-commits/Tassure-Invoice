@@ -20,9 +20,10 @@ export type AiFeature =
 
 /**
  * How the call started. Vincent, 2026-10-05: automatic calls that happen
- * because of a person (opening My Tasks, the learning pass after their
- * chat) count under that person but are shown apart from what they asked
- * for ("算本人，单独标「自动」").
+ * because of a person (the learning pass after their chat) count under that
+ * person but are shown apart from what they asked for ("算本人，单独标「自动」").
+ * Exception, 2026-10-07: the My Tasks reminder is the system's, not the
+ * person's, whoever opened the page (SYSTEM_OWNED_FEATURES in usage-report.ts).
  */
 export type AiTrigger = 'chat' | 'auto' | 'upload' | 'manual' | 'cron';
 

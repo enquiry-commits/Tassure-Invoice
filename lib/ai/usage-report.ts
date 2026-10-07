@@ -42,11 +42,11 @@ export type UsageTotals = {
 
 export type PersonUsage = {
   key: string;
-  /** person = a signed-in actor; system = a scheduled job; unidentified = a call with no actor that wasn't a cron run. */
+  /** person = a signed-in actor; system = a scheduled job or a system-owned feature (SYSTEM_OWNED_FEATURES); unidentified = a call with no actor that wasn't a cron run. */
   kind: 'person' | 'system' | 'unidentified';
   email: string | null;
   windows: Record<UsageWindow, UsageTotals>;
-  /** This month's calls that happened automatically because of this person (My Tasks brief, post-chat learning). */
+  /** This month's calls that happened automatically because of this person (the learning pass after their chat). */
   autoMonth: UsageTotals;
 };
 
@@ -112,7 +112,22 @@ function windowsOf(): Record<UsageWindow, UsageTotals> {
   return { today: emptyTotals(), week: emptyTotals(), month: emptyTotals() };
 }
 
-export function personKey(r: Pick<UsageEventRow, 'actor_email' | 'trigger'>): { key: string; kind: PersonUsage['kind']; email: string | null } {
+/**
+ * Features whose calls are the SYSTEM's, whoever happened to open the page that
+ * set them off. Vincent, 2026-10-07: "My Tasks 提醒的 token 全部算系统的" — the
+ * My Tasks daily reminder is something the system does by itself, so it must
+ * not count against the colleague who opened My Tasks, nor against the admin
+ * looking at a colleague's page with View As. The row still records who opened
+ * it (actor_email) and whose page it was (subject_email); only the totals move.
+ * It is a rule on the FEATURE, not on the stored actor, so rows written before
+ * this decision count the same way as new ones — nothing in the database is
+ * rewritten. (The learning pass after a person's chat is NOT in this list: it
+ * still counts under that person, shown apart as 「自动」.)
+ */
+export const SYSTEM_OWNED_FEATURES: readonly string[] = ['my_tasks_brief'];
+
+export function personKey(r: Pick<UsageEventRow, 'actor_email' | 'trigger' | 'feature'>): { key: string; kind: PersonUsage['kind']; email: string | null } {
+  if (SYSTEM_OWNED_FEATURES.includes(r.feature)) return { key: '(system)', kind: 'system', email: null };
   if (r.actor_email) return { key: r.actor_email.toLowerCase(), kind: 'person', email: r.actor_email.toLowerCase() };
   if (r.trigger === 'cron') return { key: '(system)', kind: 'system', email: null };
   return { key: '(unidentified)', kind: 'unidentified', email: null };
@@ -135,7 +150,8 @@ export function summarizeUsage(rows: readonly UsageEventRow[], now: Date): Usage
       add(person.windows[w], r);
       add(feature.windows[w], r);
     }
-    if (r.trigger === 'auto' && inWindow.includes('month')) add(person.autoMonth, r);
+    // 「自动」= automatic because of THIS person; everything the system does is automatic by nature, so its row has none.
+    if (who.kind === 'person' && r.trigger === 'auto' && inWindow.includes('month')) add(person.autoMonth, r);
     people.set(who.key, person);
     features.set(r.feature, feature);
   }

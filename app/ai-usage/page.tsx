@@ -115,7 +115,7 @@ export default function AiUsagePage() {
   const toggle = (key: string) => setOpen(prev => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
 
   const nameOf = (email: string | null) => (email ? data?.names[email.toLowerCase()] ?? email : '—');
-  const personLabel = (p: Pick<PersonUsage, 'kind' | 'email'>) => (p.kind === 'system' ? '系统（定时任务）' : p.kind === 'unidentified' ? '未识别的调用' : nameOf(p.email));
+  const personLabel = (p: Pick<PersonUsage, 'kind' | 'email'>) => (p.kind === 'system' ? '系统（定时任务、My Tasks 提醒）' : p.kind === 'unidentified' ? '未识别的调用' : nameOf(p.email));
   const summary = data?.summary;
   const unpriced = summary?.windows.month.unpricedCalls ?? 0;
   const groups: PersonCalls[] = data ? groupCallsByPerson(data.monthCalls) : [];
@@ -134,7 +134,7 @@ export default function AiUsagePage() {
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12, maxWidth: 760 }}>
             每一次 AI 调用（助手聊天、Turnover AI 读单据、My Tasks 今日提醒、定时任务…）都会记一笔：谁、哪个功能、哪个模型、多少 token、按官网价格估算多少美元。
-            用 View As 时算真正操作的人；打开页面自动产生的调用算本人，但单独列为「自动」。
+            用 View As 时算真正操作的人；My Tasks 今日提醒一律算系统；聊天后的自动学习算本人，但单独列为「自动」。
           </p>
         </div>
         <button type="button" onClick={refreshNow} disabled={refreshing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 750, cursor: refreshing ? 'wait' : 'pointer', opacity: refreshing ? 0.65 : 1, flexShrink: 0 }}>
@@ -291,7 +291,10 @@ export default function AiUsagePage() {
                               <td style={{ padding: '6px 10px', fontSize: 12 }}>
                                 {FEATURE_LABEL[r.feature] ?? r.feature}
                                 <span style={{ marginLeft: 6, fontSize: 10, color: r.trigger === 'auto' ? '#b45309' : '#64748b', background: r.trigger === 'auto' ? '#fffbeb' : '#f1f5f9', borderRadius: 999, padding: '1px 6px' }}>{TRIGGER_LABEL[r.trigger] ?? r.trigger}{r.step ? ` · ${r.step}` : ''}</span>
-                                {r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 代 {nameOf(r.subject_email)}</span>}
+                                {g.kind === 'system'
+                                  // The system's reminders are counted under it, so say whose page each one was for.
+                                  ? (r.subject_email ?? r.actor_email) && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 给 {nameOf(r.subject_email ?? r.actor_email)}</span>
+                                  : r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 代 {nameOf(r.subject_email)}</span>}
                               </td>
                               <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.model ?? '—'}</td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#173b61' }}><Cost value={r.cost_usd} /></td>

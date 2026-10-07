@@ -4738,9 +4738,21 @@ again.
   Vincent, 2026-10-05: "为了准确的知道每个人使用了多少TOKENS，我要有一个明确
   的实时记录"; his decisions: only he sees the usage; under View As usage
   counts for the person who pressed the button ("算真正操作的人"), the viewed
-  account noted beside it; automatic calls a person causes (the My Tasks
-  brief on opening the page, the learning pass after their chat) count
-  under them, shown apart ("算本人，单独标「自动」"); USD. What keeps it
+  account noted beside it; automatic calls a person causes (the learning
+  pass after their chat) count under them, shown apart ("算本人，单独标
+  「自动」"); USD. **Changed 2026-10-07 (Vincent, on the usage page: "My Tasks
+  提醒的 token 全部算系统的"): the My Tasks reminder counts as the SYSTEM's,
+  whoever opened the page** — a colleague on their own page, or an admin
+  using View As on someone else's. The rule is `SYSTEM_OWNED_FEATURES` in
+  `lib/ai/usage-report.ts`, checked by `personKey()` BEFORE the actor, so
+  rows written before the decision count the same way as new ones and
+  nothing in `ai_usage_events` is rewritten: a reminder row still records who
+  opened it (`actor_email`) and whose page it was (`subject_email`), and the
+  system's call list shows "给 <name>". Measured on the real ledger the day it
+  changed: 5 of 33 rows moved (4,638 tokens, about US$0.017); the grand total
+  was identical before and after. The learning pass after a chat is NOT
+  system-owned — it still counts under the chatter. The system row has no
+  「自动」 figure (everything it does is automatic). What keeps it
   accurate:
   (1) Per CALL, written the moment its response arrives
   (`trackAiUsage()` starts the insert at once and hands it to `after()`) —
@@ -4778,8 +4790,8 @@ again.
   `GET /api/ai-usage`, `lib/ai/usage-report.ts`): per person and per
   feature for today / 7 days / this month in SINGAPORE time (a window
   starts at SGT midnight, not UTC), calls with no person shown apart as
-  system (cron) or unidentified, the person's automatic calls in their own
-  column, and an unpriced call shown as "+?", never as $0. Vincent only,
+  system (cron, or a system-owned feature such as the My Tasks reminder) or
+  unidentified, the person's automatic calls in their own column, and an unpriced call shown as "+?", never as $0. Vincent only,
   through its OWN flag `canViewAiUsage` (not `admin` — giving someone
   admin must not also show them everyone's usage): the `ai-usage` page
   rule in `lib/workspaces.ts` gates the page, and the API checks the flag

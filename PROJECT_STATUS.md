@@ -1,5 +1,26 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (CHANGED: the My Tasks daily reminder's AI tokens now count as the SYSTEM's on Admin › AI Usage, not the person's. Asked: Vincent — a screenshot of two "My Tasks 今日提醒 · 自动 · 代 Jay Tay" rows counted under him (View As), and "My Tasks 提醒的 token 全部算系统的".)
+
+**What it was.** The reminder's Claude call was tagged with whoever opened My Tasks (`trigger: 'auto'`, `actorEmail`). So a colleague opening their own page was charged for it, and an admin using View As on someone's page (the "代 Jay Tay" in the screenshot) was charged for that person's reminder. That was Vincent's own 2026-10-05 choice ("算本人，单独标「自动」"); he has now reversed it for this one feature.
+
+**What changed (INV-AI-010).**
+- `lib/ai/usage-report.ts`: `SYSTEM_OWNED_FEATURES = ['my_tasks_brief']`, consulted by `personKey()` BEFORE the actor — so old and new rows count the same, and nothing in `ai_usage_events` is rewritten (a row still says who opened it and whose page it was; no SQL to run).
+- The learning pass after a chat is deliberately NOT included — it still counts under the chatter, as 「自动」. The system row's own 「自动」 figure is now empty (all of it is automatic).
+- `app/ai-usage/page.tsx`: the system row reads 「系统（定时任务、My Tasks 提醒）」; the header says the reminder counts as the system's; the system's call list shows "给 <name>" so each reminder still says whose page it was. `app/api/my-tasks/route.ts` and `lib/ai/usage-ledger.ts`: comments only.
+- Docs: INV-AI-010, REG-029 step 3, `docs/CURRENT_STATE.md`.
+
+**Verification.**
+- Real ledger, read-only, old rule vs new: 5 of 33 rows moved (2 Vincent → Hoe Chyi's page, 2 Vincent → Jay Tay's page, 1 Jay Tay → his own page), 4,638 tokens, about US$0.0174. Jay Tay disappears from the person list (this was his only call); Vincent 10 → 6 calls; the system 22 → 27. The grand total is identical (33 calls, 118,045 tokens, US$0.3145).
+- `test-ai-usage.ts` ALL OK (57 checks, 10 new: View As, own page and unknown opener all land in the system; nobody is charged; the system row has no 「自动」; a person's own automatic call is still theirs; the per-month list follows the same rule; the row still records the opener). Two old expectations moved on purpose: the old fixture used a My Tasks reminder as the "person's automatic call" example (now `ai_learning`), and the system's week count rose by the reminder.
+- 6 negative controls, each proved applied and fully restored: the rule removed fails 8 checks; the rule only when there is no actor (the write-time-only design) fails 7; too broad (also the learning pass) fails 7; the system row counting its own 「自动」 fails 1; the page label or header not updated fails the source guard.
+- `tsc` 0; `test-account-access`, `test-assistant-pages`, `test-cron-wiring`, `test-company-lifecycle`, `test-answer-learning`, `test-ai-quality-judge` ALL OK. eslint: one error in `app/ai-usage/page.tsx` (`react-hooks/refs`, line 92) that is already in the committed version (`6bba89f`, 2026-10-05) — not touched.
+- **Not verified:** the page in a browser (needs a signed-in session as Vincent).
+
+**Open, not changed.** The learning pass after a chat (`ai_learning`, trigger `auto`) still counts under the person who chatted. If Vincent wants it as the system's too, it is one more entry in `SYSTEM_OWNED_FEATURES`.
+
+Previous entry follows.
+
 Last updated: 2026-10-06 (FIXED: "and" vs "&" in company names no longer hides a client's invoices. ACG INTERIOR AND EXHIBITION and GARY AND SEVEN FAMILY MUSIC TOGETHER now match their QuickBooks names ("…&…") at 99. Asked: Vincent — "都要修好" — after my report that matchScore did not treat "&" as "and". Designed with a full council, which also caught my first draft's flaws before it shipped.)
 
 **The trap avoided.** The obvious fix — drop "and" in `normalize()` — would have silently orphaned data: `normalize(name)` is STORED as `soa_owners.customer_name_norm` and `soa_remarks.customer_name_norm` (written in `app/api/billing/soa/route.ts`, looked up by equality in `lib/soa-data.ts`, `lib/soa-remarks.ts`, the SOA owner audit), and it is the Map key all over billing — the SOA owner and remarks of every customer whose name contains "and" would have vanished. So `normalize()` is unchanged (the new tool and test pin that).

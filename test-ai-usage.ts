@@ -9,7 +9,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { normalizeUsage, usageRow, type AiUsageTag } from './lib/ai/usage-ledger';
 import { estimateCostUsd, priceFor } from './lib/ai/pricing';
-import { summarizeUsage, usageWindowStarts, type UsageEventRow } from './lib/ai/usage-report';
+import { groupCallsByPerson, personKey, summarizeUsage, SYSTEM_OWNED_FEATURES, usageWindowStarts, type UsageEventRow } from './lib/ai/usage-report';
 import { APPROVED_ACCOUNTS, canAccountOpen } from './lib/approved-accounts';
 import { PAGE_RULES } from './lib/workspaces';
 import { NAV_TREE, navLeaves } from './lib/nav-tree';
@@ -87,7 +87,7 @@ console.log('\n--- the usage page: Singapore-time windows, who each call counts 
   });
   const rows = [
     row(1, '2026-10-05T02:00:00Z', 'vincent@tassure.com', 'chat', 'assistant', 0.05),          // today
-    row(2, '2026-10-04T15:59:59Z', 'vincent@tassure.com', 'auto', 'my_tasks_brief', 0.001),    // 23:59:59 SGT yesterday
+    row(2, '2026-10-04T15:59:59Z', 'vincent@tassure.com', 'auto', 'ai_learning', 0.001),      // 23:59:59 SGT yesterday — the learning pass after his chat: counts under him, as 「自动」
     row(3, '2026-09-30T15:59:59Z', null, 'cron', 'sg_news', 0.03),                             // last day of September (SGT)
     row(4, '2026-10-05T01:00:00Z', null, 'chat', 'assistant', null),                           // unidentified, unpriced model
     row(5, '2026-10-05T02:30:00Z', 'minquan@tassure.com', 'chat', 'assistant', 0.02),
@@ -102,6 +102,36 @@ console.log('\n--- the usage page: Singapore-time windows, who each call counts 
   check('token total = input + cache writes + cache reads + output', vincent.windows.today.tokens === 1600, vincent.windows.today);
   check('people first (most cost first), then unidentified calls, then the system', sum.people.map(p => p.key).join() === 'vincent@tassure.com,minquan@tassure.com,(unidentified),(system)', sum.people.map(p => p.key));
   check('a scheduled job is the system\'s, never a person\'s', sum.people.find(p => p.kind === 'system')?.windows.week.calls === 1 && sum.people.find(p => p.kind === 'system')?.windows.month.calls === 0);
+  // 2026-10-07, Vincent: "My Tasks 提醒的 token 全部算系统的". The My Tasks reminder counts as the
+  // SYSTEM's whoever opened the page — an admin using View As, a colleague on their own page, or
+  // nobody known — while a person's own automatic call (ai_learning) still counts under them.
+  {
+    const brief = (id: number, actor: string | null, subject: string | null, cost: number): UsageEventRow => ({ ...row(id, '2026-10-05T02:10:00Z', actor, 'auto', 'my_tasks_brief', cost), subject_email: subject });
+    const rows2 = [
+      row(1, '2026-10-05T02:00:00Z', 'vincent@tassure.com', 'chat', 'assistant', 0.05),
+      row(2, '2026-10-05T02:05:00Z', 'vincent@tassure.com', 'auto', 'ai_learning', 0.001),
+      brief(10, 'vincent@tassure.com', 'jay@tassure.com', 0.002),   // Vincent viewing Jay's My Tasks (View As)
+      brief(11, 'minquan@tassure.com', null, 0.003),                // a colleague opening their own My Tasks
+      brief(12, null, null, 0.004),                                 // opener not known
+      row(13, '2026-10-05T02:20:00Z', null, 'cron', 'sg_news', 0.03),
+    ];
+    const s2 = summarizeUsage(rows2, now);
+    const sys = s2.people.find(p => p.kind === 'system');
+    const vin = s2.people.find(p => p.email === 'vincent@tassure.com');
+    check('the 3 My Tasks reminders and the scheduled job are all the system\'s', sys?.windows.today.calls === 4 && near(sys.windows.today.costUsd, 0.039), sys?.windows.today);
+    check('nobody is charged for a reminder: Vincent keeps his chat + his own learning pass only (View As did not move it to him)', vin?.windows.today.calls === 2 && near(vin.windows.today.costUsd, 0.051), vin?.windows.today);
+    check('a colleague who only opened My Tasks has no usage at all, and nothing is "unidentified"', !s2.people.some(p => p.email === 'minquan@tassure.com' || p.kind === 'unidentified'), s2.people.map(p => p.key));
+    check('a person\'s own automatic call still shows as 「自动」; the system row has none (all of it is automatic)', vin?.autoMonth.calls === 1 && sys?.autoMonth.calls === 0, { vin: vin?.autoMonth, sys: sys?.autoMonth });
+    check('the grand total still includes every call', s2.windows.today.calls === 6 && near(s2.windows.today.costUsd, 0.09), s2.windows.today);
+    check('the same rule in the per-month call list: the reminders sit in the system group', groupCallsByPerson(rows2).find(g => g.kind === 'system')?.calls.filter(c => c.feature === 'my_tasks_brief').length === 3);
+    const kept = groupCallsByPerson(rows2).find(g => g.kind === 'system')?.calls.find(c => c.id === 10);
+    check('nothing is rewritten: the row still says who opened it and whose page it was', kept?.actor_email === 'vincent@tassure.com' && kept.subject_email === 'jay@tassure.com', kept);
+    check('personKey: the reminder is the system\'s with or without an actor; any other automatic call is not', personKey({ actor_email: 'vincent@tassure.com', trigger: 'auto', feature: 'my_tasks_brief' }).kind === 'system'
+      && personKey({ actor_email: null, trigger: 'auto', feature: 'my_tasks_brief' }).kind === 'system'
+      && personKey({ actor_email: 'vincent@tassure.com', trigger: 'auto', feature: 'ai_learning' }).kind === 'person'
+      && personKey({ actor_email: null, trigger: 'auto', feature: 'ai_learning' }).kind === 'unidentified');
+    check('the system-owned list is exactly the My Tasks reminder', SYSTEM_OWNED_FEATURES.join() === 'my_tasks_brief', SYSTEM_OWNED_FEATURES);
+  }
   check('an unpriced call adds no money but is counted as unpriced', sum.people.find(p => p.kind === 'unidentified')?.windows.today.unpricedCalls === 1 && sum.people.find(p => p.kind === 'unidentified')?.windows.today.costUsd === 0);
 }
 
@@ -138,8 +168,10 @@ console.log('\n--- source guards ---');
   check('assistant: the chat counts under the real signed-in person, the View-As account beside it', /actorEmail: realAccount\?\.email \?\? null,/.test(assistant) && /subjectEmail: account && account\.email !== realAccount\?\.email \? account\.email : null,/.test(assistant));
   check('assistant: each Claude round is its own row', /claudeMessages\(\{ \.\.\.usage, step: `round_\$\{turn \+ 1\}` \}/.test(assistant));
   check('assistant: the learning pass after a chat counts under the chatter, as automatic', /feature: 'ai_learning', trigger: 'auto', actorEmail: chatUsage\.actorEmail/.test(assistant));
-  check('My Tasks: the brief counts under the person who opened the page, as automatic', /feature: 'my_tasks_brief', trigger: 'auto', actorEmail: realAccount\.email, subjectEmail: viewingAs\?\.email \?\? null/.test(read('app/api/my-tasks/route.ts')));
-  check('Turnover AI: a file read counts under the uploader', /usage: \{ feature: 'turnover_ai', trigger: 'upload', actorEmail: account\.email \}/.test(read('app/api/turnover-ai/extract/route.ts')));
+  check('My Tasks: the brief is RECORDED with who opened the page and whose page it was (the usage page counts it as the system\'s — SYSTEM_OWNED_FEATURES)',/feature: 'my_tasks_brief', trigger: 'auto', actorEmail: realAccount\.email, subjectEmail: viewingAs\?\.email \?\? null/.test(read('app/api/my-tasks/route.ts')));
+  check('the usage report consults SYSTEM_OWNED_FEATURES BEFORE the actor, and the page says so', /SYSTEM_OWNED_FEATURES\.includes\(r\.feature\)\) return \{ key: '\(system\)'/.test(read('lib/ai/usage-report.ts'))
+    && /My Tasks 今日提醒一律算系统/.test(read('app/ai-usage/page.tsx')) && /系统（定时任务、My Tasks 提醒）/.test(read('app/ai-usage/page.tsx')));
+  check('Turnover AI: a file read counts under the uploader',/usage: \{ feature: 'turnover_ai', trigger: 'upload', actorEmail: account\.email \}/.test(read('app/api/turnover-ai/extract/route.ts')));
   const jobs: [string, string][] = [['app/api/ai-learning/analyze-all/route.ts', 'ai_learning'], ['app/api/reports/narrative-cron/route.ts', 'reports_narrative'], ['app/api/ai-quality/review/route.ts', 'ai_quality_review'], ['app/api/sg-news/sync/route.ts', 'sg_news']];
   const missing = jobs.filter(([file, feature]) => !read(file).includes(`scheduledJobUsage(req, '${feature}')`));
   check('scheduled jobs: the cron run is the system\'s, a manual run counts under the person', missing.length === 0, missing);
