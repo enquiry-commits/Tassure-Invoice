@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { getRequestAccount } from '@/lib/request-account';
 import { APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
-import { summarizeUsage, usageWindowStarts, type UsageEventRow } from '@/lib/ai/usage-report';
+import { isMonthKey, monthRangeSgt, monthsWithData, sgtMonthKey, summarizeUsage, usageWindowStarts, type UsageEventRow } from '@/lib/ai/usage-report';
 
 // GET /api/ai-usage — Admin › AI Usage's numbers (docs/INVARIANTS.md
 // INV-AI-010): every person's AI token usage and estimated USD for today,
@@ -14,6 +14,9 @@ import { summarizeUsage, usageWindowStarts, type UsageEventRow } from '@/lib/ai/
 // lives here as well as in proxy.ts's page rule.
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
+
+// Safety cap on one month's call list sent to the page (a month is far below this today).
+const MAX_MONTH_ROWS = 5000;
 
 const COLUMNS = 'id, created_at, actor_email, subject_email, feature, trigger, step, turn_key, provider, model, input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, web_search_requests, cost_usd';
 
@@ -35,20 +38,27 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const starts = usageWindowStarts(now);
   const since = new Date(Math.min(starts.week.getTime(), starts.month.getTime())).toISOString();
+  // The call list is read by month ("2026 - Sep"); default = the current Singapore month.
+  const requested = req.nextUrl.searchParams.get('month');
+  const month = isMonthKey(requested) ? requested : sgtMonthKey(now);
+  const range = monthRangeSgt(month)!;
   try {
-    const [rows, recent, first] = await Promise.all([
+    const [rows, monthCalls, first] = await Promise.all([
       pageAll(() => supabase.from('ai_usage_events').select(COLUMNS).gte('created_at', since).order('id', { ascending: true })) as Promise<UsageEventRow[]>,
-      supabase.from('ai_usage_events').select(COLUMNS).order('id', { ascending: false }).limit(50),
+      pageAll(() => supabase.from('ai_usage_events').select(COLUMNS).gte('created_at', range.start.toISOString()).lt('created_at', range.end.toISOString()).order('id', { ascending: true })) as Promise<UsageEventRow[]>,
       supabase.from('ai_usage_events').select('created_at').order('id', { ascending: true }).limit(1),
     ]);
-    if (recent.error) throw new Error(recent.error.message);
     if (first.error) throw new Error(first.error.message);
+    const firstRecordedAt = first.data?.[0]?.created_at ?? null;
     return NextResponse.json({
       generatedAt: now.toISOString(),
       totalRows: probe.count ?? 0,
-      firstRecordedAt: first.data?.[0]?.created_at ?? null,
+      firstRecordedAt,
       summary: summarizeUsage(rows, now),
-      recent: (recent.data ?? []) as UsageEventRow[],
+      month,
+      months: monthsWithData(firstRecordedAt, now),
+      monthCalls: monthCalls.slice(-MAX_MONTH_ROWS),
+      monthCallsTruncated: monthCalls.length > MAX_MONTH_ROWS,
       names: Object.fromEntries(APPROVED_ACCOUNTS.map(a => [a.email.toLowerCase(), a.name])),
     });
   } catch (error) {

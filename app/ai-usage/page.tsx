@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Bot, CalendarDays, CalendarRange, Clock, Coins, RefreshCcw } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Bot, CalendarDays, CalendarRange, ChevronDown, ChevronRight, Clock, Coins, RefreshCcw } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import {
-  FEATURE_LABEL, TRIGGER_LABEL,
-  type PersonUsage, type UsageEventRow, type UsageSummary, type UsageTotals, type UsageWindow,
+  FEATURE_LABEL, TRIGGER_LABEL, groupCallsByPerson, monthLabel,
+  type PersonCalls, type PersonUsage, type UsageEventRow, type UsageSummary, type UsageTotals, type UsageWindow,
 } from '@/lib/ai/usage-report';
 
 // Admin › AI Usage — every person's AI token usage and estimated cost
@@ -14,13 +14,21 @@ import {
 // counts for the real operator, automatic calls count under the person but
 // shown apart, USD. Every AI call lands in ai_usage_events seconds after it
 // happens; this page re-reads it every 30 seconds while it is open.
+//
+// 2026-10-07 (Vincent): every table is 5 equal columns; the call list is read
+// by MONTH ("2026 - Sep"), grouped by person — system first, then colleagues —
+// and a person's calls stay folded until their row is opened. Only
+// time / person / feature / model / cost are shown per call.
 
 type UsageResponse = {
   generatedAt: string;
   totalRows: number;
   firstRecordedAt: string | null;
   summary: UsageSummary;
-  recent: UsageEventRow[];
+  month: string;
+  months: string[];
+  monthCalls: UsageEventRow[];
+  monthCallsTruncated: boolean;
   names: Record<string, string>;
 };
 
@@ -28,9 +36,9 @@ const REFRESH_MS = 30_000;
 
 type LoadResult = { data: UsageResponse } | { missing: string } | { error: string };
 
-async function fetchUsage(): Promise<LoadResult> {
+async function fetchUsage(month: string | null): Promise<LoadResult> {
   try {
-    const response = await fetch('/api/ai-usage', { cache: 'no-store' });
+    const response = await fetch(`/api/ai-usage${month ? `?month=${month}` : ''}`, { cache: 'no-store' });
     const body = await response.json();
     if (!response.ok) return { error: body.error || 'Failed to load AI usage' };
     if (body.tableMissing) return { missing: body.error };
@@ -49,6 +57,15 @@ const sgt = (iso: string, withDate = true) => new Date(iso).toLocaleString('en-S
 
 const WINDOW_LABEL: Record<UsageWindow, string> = { today: '今天', week: '近 7 天', month: '本月' };
 
+// Every table on this page is five equal columns.
+const FIVE_COLS = (
+  <colgroup>
+    {[0, 1, 2, 3, 4].map(i => <col key={i} style={{ width: '20%' }} />)}
+  </colgroup>
+);
+const TABLE_STYLE = { width: '100%', tableLayout: 'fixed', minWidth: 760 } as const;
+const CELL = { padding: '8px 10px' } as const;
+
 function TotalsCell({ t, muted }: { t: UsageTotals; muted?: boolean }) {
   if (!t.calls) return <span style={{ color: '#cbd5e1' }}>—</span>;
   return (
@@ -59,11 +76,20 @@ function TotalsCell({ t, muted }: { t: UsageTotals; muted?: boolean }) {
   );
 }
 
+function Cost({ value, unpriced }: { value: number | string | null; unpriced?: number }) {
+  if (value === null) return <span title="这个模型的价格未确认" style={{ color: '#b45309' }}>未定价</span>;
+  return <>{usd(Number(value))}{unpriced ? <span title="部分调用的模型价格未确认，未计入金额" style={{ color: '#b45309' }}> +?</span> : null}</>;
+}
+
 export default function AiUsagePage() {
   const [data, setData] = useState<UsageResponse | null>(null);
   const [notice, setNotice] = useState<{ kind: 'missing' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [month, setMonth] = useState<string | null>(null); // null = the current month
+  const [open, setOpen] = useState<Set<string>>(new Set()); // folded by default
+  const monthRef = useRef<string | null>(null);
+  monthRef.current = month;
 
   const apply = useCallback((result: LoadResult) => {
     if ('data' in result) { setData(result.data); setNotice(null); }
@@ -76,7 +102,7 @@ export default function AiUsagePage() {
   // Live: re-read every 30 seconds while the tab is visible, and at once when it comes back.
   useEffect(() => {
     let alive = true;
-    const run = () => { void fetchUsage().then(result => { if (alive) apply(result); }); };
+    const run = () => { void fetchUsage(monthRef.current).then(result => { if (alive) apply(result); }); };
     run();
     const timer = setInterval(() => { if (document.visibilityState === 'visible') run(); }, REFRESH_MS);
     const onVisible = () => { if (document.visibilityState === 'visible') run(); };
@@ -84,12 +110,17 @@ export default function AiUsagePage() {
     return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [apply]);
 
-  const refreshNow = () => { setRefreshing(true); void fetchUsage().then(apply); };
+  const refreshNow = () => { setRefreshing(true); void fetchUsage(month).then(apply); };
+  const pickMonth = (m: string) => { setMonth(m); setOpen(new Set()); setRefreshing(true); void fetchUsage(m).then(apply); };
+  const toggle = (key: string) => setOpen(prev => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
 
   const nameOf = (email: string | null) => (email ? data?.names[email.toLowerCase()] ?? email : '—');
-  const personLabel = (p: PersonUsage) => (p.kind === 'system' ? '系统（定时任务）' : p.kind === 'unidentified' ? '未识别的调用' : nameOf(p.email));
+  const personLabel = (p: Pick<PersonUsage, 'kind' | 'email'>) => (p.kind === 'system' ? '系统（定时任务）' : p.kind === 'unidentified' ? '未识别的调用' : nameOf(p.email));
   const summary = data?.summary;
   const unpriced = summary?.windows.month.unpricedCalls ?? 0;
+  const groups: PersonCalls[] = data ? groupCallsByPerson(data.monthCalls) : [];
+  const monthCost = summary?.windows.month.costUsd ?? 0;
+  const monthCalls = summary?.windows.month.calls ?? 0;
 
   return (
     <div>
@@ -137,7 +168,8 @@ export default function AiUsagePage() {
               <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>本月还没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table className="system-list-table" style={{ width: '100%', minWidth: 640 }}>
+                <table className="system-list-table" style={TABLE_STYLE}>
+                  {FIVE_COLS}
                   <thead>
                     <tr className="list-column-header-gray">
                       <th style={{ textAlign: 'left' }}>人员</th>
@@ -148,9 +180,9 @@ export default function AiUsagePage() {
                   <tbody>
                     {summary.people.map(p => (
                       <tr key={p.key} className="system-list-row" style={{ background: p.kind === 'person' ? undefined : '#f8fafc' }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 700, color: p.kind === 'person' ? '#1e293b' : '#64748b' }}>{personLabel(p)}</td>
-                        {(['today', 'week', 'month'] as const).map(w => <td key={w} style={{ padding: '8px 10px' }}><TotalsCell t={p.windows[w]} /></td>)}
-                        <td style={{ padding: '8px 10px' }}><TotalsCell t={p.autoMonth} muted /></td>
+                        <td style={{ ...CELL, fontWeight: 700, color: p.kind === 'person' ? '#1e293b' : '#64748b' }}>{personLabel(p)}</td>
+                        {(['today', 'week', 'month'] as const).map(w => <td key={w} style={CELL}><TotalsCell t={p.windows[w]} /></td>)}
+                        <td style={CELL}><TotalsCell t={p.autoMonth} muted /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -165,20 +197,37 @@ export default function AiUsagePage() {
               <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>本月还没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table className="system-list-table" style={{ width: '100%', minWidth: 520 }}>
+                <table className="system-list-table" style={TABLE_STYLE}>
+                  {FIVE_COLS}
                   <thead>
                     <tr className="list-column-header-gray">
                       <th style={{ textAlign: 'left' }}>功能</th>
                       {(['today', 'week', 'month'] as const).map(w => <th key={w} style={{ textAlign: 'left' }}>{WINDOW_LABEL[w]}</th>)}
+                      <th style={{ textAlign: 'left' }}>本月占比</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.features.map(f => (
-                      <tr key={f.feature} className="system-list-row">
-                        <td style={{ padding: '8px 10px', fontWeight: 700, color: '#1e293b' }}>{FEATURE_LABEL[f.feature] ?? f.feature}</td>
-                        {(['today', 'week', 'month'] as const).map(w => <td key={w} style={{ padding: '8px 10px' }}><TotalsCell t={f.windows[w]} /></td>)}
-                      </tr>
-                    ))}
+                    {summary.features.map(f => {
+                      const m = f.windows.month;
+                      // Share of this month's spend (by calls when nothing is priced yet).
+                      const share = monthCost > 0 ? (m.costUsd / monthCost) * 100 : monthCalls > 0 ? (m.calls / monthCalls) * 100 : 0;
+                      return (
+                        <tr key={f.feature} className="system-list-row">
+                          <td style={{ ...CELL, fontWeight: 700, color: '#1e293b' }}>{FEATURE_LABEL[f.feature] ?? f.feature}</td>
+                          {(['today', 'week', 'month'] as const).map(w => <td key={w} style={CELL}><TotalsCell t={f.windows[w]} /></td>)}
+                          <td style={CELL}>
+                            {m.calls ? (
+                              <div style={{ lineHeight: 1.35 }}>
+                                <div style={{ fontWeight: 800, color: '#173b61', fontSize: 13 }}>{share >= 1 ? `${Math.round(share)}%` : share > 0 ? '<1%' : '0%'}</div>
+                                <div style={{ marginTop: 3, height: 4, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
+                                  <div style={{ width: `${Math.min(100, share)}%`, height: '100%', background: '#1e3a5f' }} />
+                                </div>
+                              </div>
+                            ) : <span style={{ color: '#cbd5e1' }}>—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -186,52 +235,76 @@ export default function AiUsagePage() {
           </div>
 
           <div className="system-list-shell" style={{ marginBottom: 12 }}>
-            <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center' }}>
-              <span className="system-list-title">最近的调用</span>
-              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.7)', fontSize: 11 }}>最新 {data.recent.length} 次</span>
+            <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span className="system-list-title">每月调用明细</span>
+              <select value={data.month} onChange={e => pickMonth(e.target.value)} aria-label="选择月份"
+                style={{ fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,.35)', background: 'rgba(255,255,255,.12)', color: '#fff', cursor: 'pointer' }}>
+                {data.months.map(m => <option key={m} value={m} style={{ color: '#1e293b' }}>{monthLabel(m)}</option>)}
+              </select>
+              <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.7)', fontSize: 11 }}>点人员那一行展开 · {data.monthCalls.length} 次</span>
+              {groups.length > 0 && (
+                <button type="button" onClick={() => setOpen(open.size === groups.length ? new Set() : new Set(groups.map(g => g.key)))}
+                  style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                  {open.size === groups.length ? '全部收起' : '全部展开'}
+                </button>
+              )}
             </div>
-            {data.recent.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>还没有记录。下一次有人使用 AI，几秒内就会出现在这里。</div>
+            {groups.length === 0 ? (
+              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>{monthLabel(data.month)} 没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table className="system-list-table" style={{ width: '100%', minWidth: 860 }}>
+                <table className="system-list-table" style={TABLE_STYLE}>
+                  {FIVE_COLS}
                   <thead>
                     <tr className="list-column-header-gray">
-                      <th style={{ textAlign: 'left' }}>时间</th>
                       <th style={{ textAlign: 'left' }}>人员</th>
+                      <th style={{ textAlign: 'left' }}>时间</th>
                       <th style={{ textAlign: 'left' }}>功能</th>
                       <th style={{ textAlign: 'left' }}>模型</th>
-                      <th style={{ textAlign: 'right' }}>输入</th>
-                      <th style={{ textAlign: 'right' }}>写缓存</th>
-                      <th style={{ textAlign: 'right' }}>读缓存</th>
-                      <th style={{ textAlign: 'right' }}>输出</th>
                       <th style={{ textAlign: 'right' }}>费用</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.recent.map(r => (
-                      <tr key={r.id} className="system-list-row">
-                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#64748b', fontSize: 11.5 }}>{sgt(r.created_at)}</td>
-                        <td style={{ padding: '6px 10px', fontSize: 12 }}>
-                          {r.actor_email ? nameOf(r.actor_email) : r.trigger === 'cron' ? '系统' : '未识别'}
-                          {r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 代 {nameOf(r.subject_email)}</span>}
-                        </td>
-                        <td style={{ padding: '6px 10px', fontSize: 12 }}>
-                          {FEATURE_LABEL[r.feature] ?? r.feature}
-                          <span style={{ marginLeft: 6, fontSize: 10, color: r.trigger === 'auto' ? '#b45309' : '#64748b', background: r.trigger === 'auto' ? '#fffbeb' : '#f1f5f9', borderRadius: 999, padding: '1px 6px' }}>{TRIGGER_LABEL[r.trigger] ?? r.trigger}{r.step ? ` · ${r.step}` : ''}</span>
-                        </td>
-                        <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap' }}>{r.model ?? '—'}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 11.5 }}>{tokens(r.input_tokens)}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 11.5, color: '#64748b' }}>{tokens(r.cache_write_tokens)}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 11.5, color: '#64748b' }}>{tokens(r.cache_read_tokens)}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 11.5 }}>{tokens(r.output_tokens)}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#173b61' }}>{r.cost_usd === null ? <span title="这个模型的价格未确认" style={{ color: '#b45309' }}>未定价</span> : usd(Number(r.cost_usd))}</td>
-                      </tr>
-                    ))}
+                    {groups.map(g => {
+                      const isOpen = open.has(g.key);
+                      return (
+                        <Fragment key={g.key}>
+                          <tr className="system-list-row" onClick={() => toggle(g.key)} aria-expanded={isOpen}
+                            style={{ cursor: 'pointer', background: g.kind === 'person' ? '#fff' : '#f8fafc' }}>
+                            <td style={{ ...CELL, fontWeight: 800, color: g.kind === 'person' ? '#1e293b' : '#64748b' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                {isOpen ? <ChevronDown size={14} color="#64748b" /> : <ChevronRight size={14} color="#64748b" />}
+                                {personLabel(g)}
+                              </span>
+                            </td>
+                            <td style={{ ...CELL, fontSize: 12, color: '#475569', fontWeight: 700 }}>{monthLabel(data.month)}</td>
+                            <td style={{ ...CELL, fontSize: 12, color: '#64748b' }}>{g.totals.calls} 次调用</td>
+                            <td style={{ ...CELL, fontSize: 11.5, color: '#64748b' }} title={g.models.join(', ')}>
+                              {g.models.length === 0 ? '—' : g.models.length === 1 ? g.models[0] : `${g.models.length} 个模型`}
+                            </td>
+                            <td style={{ ...CELL, textAlign: 'right', fontWeight: 800, color: '#173b61' }}><Cost value={g.totals.costUsd} unpriced={g.totals.unpricedCalls} /></td>
+                          </tr>
+                          {isOpen && g.calls.map(r => (
+                            <tr key={r.id} className="system-list-row" style={{ background: '#fbfdff' }}>
+                              <td style={{ ...CELL, padding: '6px 10px 6px 30px', color: '#cbd5e1', fontSize: 11 }}>↳</td>
+                              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#64748b', fontSize: 11.5 }}>{sgt(r.created_at)}</td>
+                              <td style={{ padding: '6px 10px', fontSize: 12 }}>
+                                {FEATURE_LABEL[r.feature] ?? r.feature}
+                                <span style={{ marginLeft: 6, fontSize: 10, color: r.trigger === 'auto' ? '#b45309' : '#64748b', background: r.trigger === 'auto' ? '#fffbeb' : '#f1f5f9', borderRadius: 999, padding: '1px 6px' }}>{TRIGGER_LABEL[r.trigger] ?? r.trigger}{r.step ? ` · ${r.step}` : ''}</span>
+                                {r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 代 {nameOf(r.subject_email)}</span>}
+                              </td>
+                              <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.model ?? '—'}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#173b61' }}><Cost value={r.cost_usd} /></td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
+            {data.monthCallsTruncated && <div style={{ padding: '8px 14px', fontSize: 11, color: '#b45309' }}>这个月的调用太多，只显示最新的部分。</div>}
           </div>
 
           <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: 11, lineHeight: 1.6 }}>

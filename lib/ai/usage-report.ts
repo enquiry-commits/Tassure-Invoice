@@ -147,3 +147,77 @@ export function summarizeUsage(rows: readonly UsageEventRow[], now: Date): Usage
     starts: { today: starts.today.toISOString(), week: starts.week.toISOString(), month: starts.month.toISOString() },
   };
 }
+
+// ── Per-month, per-person call list (2026-10-07) ─────────────────────────
+// Vincent: the call list is read by MONTH ("2026 - Sep"), grouped by person —
+// system first, then each colleague — and a person's calls stay folded away
+// until their row is opened.
+
+const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function isMonthKey(v: unknown): v is string {
+  return typeof v === 'string' && MONTH_RE.test(v);
+}
+
+/** The Singapore month 'YYYY-MM' that contains `at`. */
+export function sgtMonthKey(at: Date): string {
+  const sgt = new Date(at.getTime() + SGT_OFFSET_MS);
+  return `${sgt.getUTCFullYear()}-${String(sgt.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** [start, end) of a Singapore calendar month as real instants, or null for a malformed key. */
+export function monthRangeSgt(month: string): { start: Date; end: Date } | null {
+  const m = MONTH_RE.exec(month);
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]) - 1;
+  return { start: new Date(Date.UTC(y, mo, 1) - SGT_OFFSET_MS), end: new Date(Date.UTC(y, mo + 1, 1) - SGT_OFFSET_MS) };
+}
+
+/** "2026-09" -> "2026 - Sep". */
+export function monthLabel(month: string): string {
+  const m = MONTH_RE.exec(month);
+  return m ? `${m[1]} - ${MONTH_ABBR[Number(m[2]) - 1]}` : month;
+}
+
+/** Every month from the first recorded call's month through the current one, newest first. */
+export function monthsWithData(firstRecordedAt: string | null, now: Date): string[] {
+  const current = sgtMonthKey(now);
+  const first = firstRecordedAt ? sgtMonthKey(new Date(firstRecordedAt)) : current;
+  const out: string[] = [];
+  let [y, mo] = first.split('-').map(Number);
+  const [cy, cmo] = current.split('-').map(Number);
+  while (y < cy || (y === cy && mo <= cmo)) {
+    out.push(`${y}-${String(mo).padStart(2, '0')}`);
+    mo += 1;
+    if (mo > 12) { mo = 1; y += 1; }
+  }
+  return out.reverse();
+}
+
+export type PersonCalls = {
+  key: string;
+  kind: PersonUsage['kind'];
+  email: string | null;
+  /** This person's calls in the month, newest first. */
+  calls: UsageEventRow[];
+  totals: UsageTotals;
+  models: string[];
+};
+
+/** Calls grouped by person, system first, then people (biggest spender first), then any unidentified calls. */
+export function groupCallsByPerson(rows: readonly UsageEventRow[]): PersonCalls[] {
+  const groups = new Map<string, PersonCalls>();
+  for (const r of rows) {
+    const who = personKey(r);
+    const g = groups.get(who.key) ?? { ...who, calls: [], totals: emptyTotals(), models: [] };
+    g.calls.push(r);
+    add(g.totals, r);
+    if (r.model && !g.models.includes(r.model)) g.models.push(r.model);
+    groups.set(who.key, g);
+  }
+  const order = { system: 0, person: 1, unidentified: 2 } as const;
+  const list = [...groups.values()];
+  for (const g of list) g.calls.sort((a, b) => b.id - a.id);
+  return list.sort((a, b) => order[a.kind] - order[b.kind] || b.totals.costUsd - a.totals.costUsd || b.totals.calls - a.totals.calls || a.key.localeCompare(b.key));
+}

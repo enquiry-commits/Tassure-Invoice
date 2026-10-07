@@ -7530,3 +7530,21 @@ a reviewer can check it before anything is created.
   somewhere real today, and gets the article link after the next sync.
 - NOT run against the live sites here (Playwright scrape; needs the deployed cron or
   the manual "手动运行一次"); the title→link matcher is unit-tested only.
+
+## 2026-10-07 — Admin › AI Usage: 5 equal columns, per-month per-person call list
+
+- Vincent: every table 5 equal columns; the call list keeps only time / person /
+  feature / model / cost, person in column 1, system first then colleagues, a
+  person's calls folded until their row is opened, read by month ("2026 - Sep").
+- `lib/ai/usage-report.ts`: `monthRangeSgt`, `monthLabel`, `monthsWithData`,
+  `sgtMonthKey`, `isMonthKey`, `groupCallsByPerson` (system → people by month spend
+  → unidentified; calls newest first). `/api/ai-usage?month=YYYY-MM` now returns
+  that month's calls (`monthCalls`, `months`, capped at 5000) instead of the latest
+  50 (`recent` removed — the page was its only reader). The access-flag check line
+  is unchanged (test-ai-usage.ts asserts it).
+- Page: 按人 and 按功能 and the call list are all `table-layout: fixed` with five 20%
+  columns; 按功能 got a fifth column "本月占比" (share of this month's spend) so it
+  matches; month dropdown in the call list's title bar; 全部展开/全部收起.
+- test-ai-usage.ts passes; month boundaries checked in Singapore time (a call at
+  30 Sep 17:00Z lands in October); grouping order checked on real October rows.
+  Not seen in a browser.
