@@ -11,9 +11,10 @@
 #   bash scripts/push-local-commits.sh --push <commit> [<commit> ...]     replay, then push to origin main
 # Give the commits oldest first. `git cherry origin/main HEAD` lists the local commits origin does not have yet ("+").
 #
-# A conflict ONLY in PROJECT_STATUS.md (two sessions each added a newest-first entry at the top) is resolved by keeping
-# both entries, the replayed one first. Any other conflict stops everything and pushes nothing. After the replay it
-# prints how many copies of PROJECT_STATUS.md's newest entry exist and whether any conflict marker is left.
+# A conflict ONLY in PROJECT_STATUS.md (every session adds a newest-first entry at the top) is merged ENTRY BY ENTRY
+# (scripts/merge-project-status.js: new entries go in above the entry that follows them, an entry the replayed commit changed
+# replaces origin's copy, nothing is duplicated). Any other conflict stops everything and pushes nothing. After the replay it
+# prints PROJECT_STATUS.md's newest entries and whether any conflict marker is left.
 set -e
 PUSH=0
 if [ "$1" = "--push" ]; then PUSH=1; shift; fi
@@ -35,11 +36,11 @@ for c in "$@"; do
   if ! git cherry-pick "$c" > "$TMP/pick.log" 2>&1; then
     conflicted="$(git diff --name-only --diff-filter=U)"
     if [ "$conflicted" = "PROJECT_STATUS.md" ]; then
-      echo "   conflict in PROJECT_STATUS.md only - keeping both entries (the replayed one first)"
+      echo "   conflict in PROJECT_STATUS.md only - merging it entry by entry (scripts/merge-project-status.js; the replayed entries win)"
       git show ":1:PROJECT_STATUS.md" > "$TMP/base" 2>/dev/null || : > "$TMP/base"
       git show ":2:PROJECT_STATUS.md" > "$TMP/ours"      # what origin already has
       git show ":3:PROJECT_STATUS.md" > "$TMP/theirs"    # the commit being replayed
-      git merge-file -p --union "$TMP/theirs" "$TMP/base" "$TMP/ours" > PROJECT_STATUS.md || true
+      node "$REPO/scripts/merge-project-status.js" "$TMP/base" "$TMP/ours" "$TMP/theirs" PROJECT_STATUS.md
       if grep -q '^<<<<<<<\|^>>>>>>>' PROJECT_STATUS.md; then echo "conflict markers left - stopping, nothing pushed"; exit 1; fi
       git add PROJECT_STATUS.md
       GIT_EDITOR=true git cherry-pick --continue > /dev/null
