@@ -557,3 +557,7 @@ keep checking by hand — not for completeness. REG-008 (automation-run
 status) is the strongest automation candidate of the twelve, since it's
 already a structured DB query rather than a real UI/data walkthrough; the
 rest are deliberately manual for now.
+
+### REG-043 — SOA PIC column = QuickBooks' own PIC (after ANY change to `picShownFor` / `picShown` in lib/soa-data.ts or the SOA page's PIC column / PIC filter)
+Run `npx tsx test-soa-pic-column.ts` (`ALL OK`). Then signed in, Billing System › Outstanding › ALL: ACN CONSULTANTS' TAB row shows only Ang Shi Ming, its TAO row Tee Yu Heng, the combined row both; the owner dropdown still offers Chin Kah Ye; a TAC company whose invoices carry no Class still shows its TeamWork PIC; filtering by Chin Kah Ye no longer lists ACN's TAB row unless she is its chosen owner.
+**Guards:** `docs/INVARIANTS.md` INV-PIC-008, INV-PIC-007.

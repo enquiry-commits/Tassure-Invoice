@@ -62,6 +62,7 @@ function mergeSameSourceRows(rows: Row[]): Row {
   return {
     ...rows[0],
     picOptions: [...new Set(rows.flatMap(row => row.picOptions))],
+    picShown: [...new Set(rows.flatMap(row => row.picShown))],
     soaPic: confirmedOwners.length === 1 ? confirmedOwners[0] : null,
     suggestedOwner: suggestedOwners.length === 1 ? suggestedOwners[0] : null,
     invoiceCount: rows.reduce((sum, row) => sum + row.invoiceCount, 0),
@@ -730,7 +731,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     for (const c of companies ?? []) {
       const owner = effectiveOwner(c);
       if (owner) names.add(owner);
-      for (const p of c.picOptions) names.add(p);
+      for (const p of c.picShown) names.add(p);
     }
     // Vincent, 2026-09-23: "BD" (Bad Debt — a write-off marker, not a real
     // staff member) needs to sit apart from the alphabetized staff list,
@@ -832,7 +833,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     const selectedSet = new Set(picFilters);
     const ownsRow = (c: Row) => {
       const owner = effectiveOwner(c);
-      return owner ? selectedSet.has(owner) : c.picOptions.some(p => selectedSet.has(p));
+      return owner ? selectedSet.has(owner) : c.picShown.some(p => selectedSet.has(p));
     };
     // Vincent, 2026-09-23, on the "All" view specifically: "当一家公司有好
     // 几个Source, 大家都有责任一起去追这个公司其他Source的欠款" — filtering
@@ -1061,7 +1062,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         })}
         <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-          {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+          {/* QuickBooks' own PIC (invoice Classes), else TeamWork's — INV-PIC-008 */}
+          {c.picShown.length ? c.picShown.map(name => <div key={name}>{name}</div>) : '—'}
         </div>
         <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
           <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
@@ -1236,6 +1238,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   },
                   lineItems: group.rows.flatMap(row => row.lineItems),
                   picOptions: [...new Set(group.rows.flatMap(row => row.picOptions))],
+                  picShown: [...new Set(group.rows.flatMap(row => row.picShown))],
                   reminderProgress: earliestNext.reminderProgress,
                 };
                 const owners = [...new Set(group.rows.map(effectiveOwner).filter((owner): owner is string => !!owner))];
@@ -1343,7 +1346,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       })}
                       <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                        {combined.picOptions.length ? combined.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+                        {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
                       </div>
                       {group.rows.length === 1 ? (
                         <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>

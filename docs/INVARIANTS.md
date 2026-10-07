@@ -751,6 +751,20 @@ again.
   independently verify a sample against the underlying source-of-truth
   data (real invoices here), not just against the updated rule.
 
+- **INV-PIC-008** — The SOA page's PIC column shows QuickBooks' own PIC:
+  the Classes on THAT book's unpaid invoices; the company's TeamWork PIC
+  only when none of them carries a Class. Vincent, 2026-10-07, on ACN
+  CONSULTANTS (TAB invoice 02610273 has only Shi Ming's Class, the row also
+  listed Kah Ye from TeamWork): "只是算QB里面的负责人…只显示 TAB 的 SHI MING
+  就好，不需要带上KAH YE"; for invoices with no Class at all (TAC's ND
+  invoices mostly — 37 of 57 owing TAC customers; TAB 24, TAO 3) he chose
+  "退回公司资料里的负责人". `picShownFor` (lib/soa-data.ts) → `picShown`, used
+  by the column (book rows and the ALL row) and the PIC filter. Deliberately
+  NOT changed: `picOptions` (TeamWork PIC + Classes) still feeds the owner
+  dropdown and `effectiveOwner`'s single-PIC fallback — the owner rules
+  (INV-PIC-007, soa_owners) are untouched. Live check: TAB 129 of 225 owing
+  rows narrower (ACN → Ang Shi Ming), TAC 13 of 52, TAO 0; no row newly
+  empty. `test-soa-pic-column.ts`.
 ## Recipient / CC / email address (INV-MAIL)
 
 - **INV-MAIL-001** — Canonical recipient policy (`lib/campaign-recipients.ts`):

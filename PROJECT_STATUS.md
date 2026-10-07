@@ -21,6 +21,12 @@ Last updated: 2026-10-07 (SG LATEST NEWS — Vincent: "ICA 和 ACRA 我没来得
 
 Previous entry follows.
 
+Last updated: 2026-10-07 (CHANGED: the SOA page's PIC column shows QuickBooks' own PIC — Vincent, on ACN CONSULTANTS: "只是算QB里面的负责人…只显示 TAB 的 SHI MING 就好，不需要带上KAH YE"; no-Class fallback "退回公司资料里的负责人").
+
+**What changed.** `picShownFor` / `picShown` (lib/soa-data.ts): the Classes on that book's unpaid invoices, else the company's TeamWork PIC; the SOA PIC column (book rows + ALL row) and the PIC filter use it. The owner dropdown, `picOptions` and `effectiveOwner` are untouched (INV-PIC-007). INV-PIC-008, REG-043, `test-soa-pic-column.ts`. **Verified:** tsc 0, test ALL OK; live read-only through `computeSoaRows`: ACN TAB → Ang Shi Ming (owner options still include Chin Kah Ye), TAO → Tee Yu Heng; TAB 129 of 225 owing rows narrower, TAC 13 of 52, TAO 0; no row newly empty. **Not verified:** the page with a login (REG-043).
+
+Previous entry follows.
+
 Last updated: 2026-10-07 (FIXED: SOA Drafts after Vincent's first live test. Asked: Vincent — "SOA合并是对的，但是 Source 那边的不对（显示的还是拆开的），并且我尝试了Drafts 无法成功"; then, on EVOP: "就算已经不在TW了…我们还是需要发SOA 去追债". A Draft now works for a company that still owes even when it is inactive / Terminated / not in TeamWork; the email body lists what its statement shows (never a look-alike company's invoice); the SOA detail's invoice numbers open the client's copy. Not yet seen on the deployed site; three things wait for Vincent's word.)
 
 **What it was.** Draft Email for EVOP (SINGAPORE) INTERNATIONAL (TAB #02610547, S$1,800) answered "No matching company found": the single-company lookup (`GET /api/client-communications/campaigns/preview`) only searched ACTIVE companies and EVOP is inactive (blank in TeamWork). Found while diagnosing it (council + real data): 11 of the 400 Outstanding rows would have produced a draft whose body said "(no invoices)" / S$0.00 beside a statement with a balance — the body matched invoices by the company's own exact name, the statement by the QuickBooks customer found with a fuzzy match (SOON & GUAN MANPOWER TRAINING / "Soon & Guan Manpower Trading"). And the invoice numbers in the SOA detail still opened QuickBooks' own PDF (accounting's split lines).

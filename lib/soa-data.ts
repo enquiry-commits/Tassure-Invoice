@@ -45,6 +45,14 @@ export interface SoaCompanyRow {
   // Backs both the PIC column's display and the dropdown Chelsea uses to
   // say which ONE of them actually owns chasing THIS outstanding balance.
   picOptions: string[];
+  // The PIC COLUMN (Vincent, 2026-10-07: "只是算QB里面的负责人" — ACN's TAB
+  // invoice carries only Shi Ming's Class, so TAB shows Shi Ming, not also
+  // Kah Ye from TeamWork): the QuickBooks Classes on THIS book's unpaid
+  // invoices; the company's TeamWork PIC only when none of them carries a
+  // Class ("退回公司资料里的负责人" — TAC's ND invoices mostly have none).
+  // Display and the PIC filter only: picOptions, the owner dropdown and
+  // effectiveOwner are unchanged. See picShownFor.
+  picShown: string[];
   // Chelsea's manual pick, from soa_owners (keyed by normalized customer
   // name + qb_company, NOT companies.id — see that table's own migration
   // comments: 18% of real customers with a balance have no matching
@@ -249,6 +257,12 @@ export async function loadArAgingSnapshot(
 // confirmed pick always wins, then the real QB-Class/Location signal, then
 // (only when there's exactly one and no better signal) the sole PIC name —
 // same 3-tier priority app/billing/soa/_components.tsx renders.
+// The PIC column's people (INV-PIC-008): QuickBooks' own Classes on the
+// unpaid invoices when there are any, else the TeamWork PIC.
+export function picShownFor(fromInvoices: readonly string[], fromCompanies: readonly string[]): string[] {
+  return fromInvoices.length ? [...fromInvoices] : [...fromCompanies];
+}
+
 export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwner' | 'picOptions'>): string | null {
   const singlePicFallback = row.picOptions.length === 1 ? row.picOptions[0] : null;
   return row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
@@ -389,6 +403,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
+      picShown: picShownFor(picFromInvoices, picFromCompanies),
       soaPic: ownerByNormName.get(key) ?? null,
       suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
       invoiceCount: entry.invoiceCount,
@@ -533,6 +548,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
+      picShown: picShownFor(picFromInvoices, picFromCompanies),
       soaPic: ownerByNormName.get(key) ?? null,
       suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
       invoiceCount: entry.invoiceCount,
