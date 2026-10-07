@@ -29,7 +29,10 @@ const SHEET_BUCKET_LABEL: Record<(typeof AGING_BUCKETS)[number]['key'], string> 
   current: 'CURRENT', d1_30: '1 - 30', d31_60: '31 - 60', d61_90: '61 - 90', d91_plus: '91 AND OVER',
 };
 
-export const COLUMN_COUNT = 2 + AGING_BUCKETS.length + 2; // Company + 5 buckets + Total + PIC
+// Company + 5 buckets + Total + PIC = 8. (Was written as 2 + buckets + 2 = 9 — one too many,
+// which left the title merge and filter one column too wide and, once REMARKS/REMINDER
+// were added after PIC on 2026-10-07, would have put their widths a column off.)
+export const COLUMN_COUNT = 1 + AGING_BUCKETS.length + 2;
 const BOLD = { bold: true };
 
 // Shared row shape for every sheet builder below AND app/api/billing/soa/
@@ -38,7 +41,14 @@ const BOLD = { bold: true };
 export type SoaExportRow = {
   companyName: string; source?: QbCompany; aging: SoaCompanyRow['aging'];
   lineItems: SoaCompanyRow['lineItems']; totalOutstanding: number; owner: string | null;
+  // Only present on the Full Workbook sheets (2026-10-07): the same Remarks and
+  // Reminder status the on-screen Outstanding list shows.
+  remarks?: string | null; reminder?: string;
 };
+
+export type SoaExportNotes = { remarks: string | null; reminder: string };
+export type SoaNotesFor = (row: SoaCompanyRow, source: QbCompany) => SoaExportNotes;
+const NOTE_COLUMNS = 2; // REMARKS + REMINDER, right after PIC
 
 // `includeSource`: the "All" sheet (2026-09-07: "在 EXPORT FULL WORKBOOK那边
 // 要加多一个 ALL 的 SHEET") is the one sheet whose rows can be the same
@@ -47,12 +57,16 @@ export type SoaExportRow = {
 // column. Every other sheet (TAB/TAC/TAO, per-person, Internal) stays
 // exactly as before — a plain boolean, not inferred from the row data,
 // keeps an empty `rows` array from silently rendering the wrong header.
-function setColumnWidths(sheet: ExcelJS.Worksheet, includeSource = false) {
-  const columnCount = includeSource ? COLUMN_COUNT + 1 : COLUMN_COUNT;
+function setColumnWidths(sheet: ExcelJS.Worksheet, includeSource = false, includeNotes = false) {
+  const columnCount = includeSource ? COLUMN_COUNT + 1 : COLUMN_COUNT; // through PIC
   sheet.getColumn(1).width = 42;
   if (includeSource) sheet.getColumn(2).width = 10;
   for (let i = includeSource ? 3 : 2; i <= columnCount - 1; i++) sheet.getColumn(i).width = 13;
   sheet.getColumn(columnCount).width = 20;
+  if (includeNotes) {
+    sheet.getColumn(columnCount + 1).width = 44; // REMARKS
+    sheet.getColumn(columnCount + 2).width = 34; // REMINDER
+  }
 }
 
 // Renders one header row + one data row per `rows`, then (unless
@@ -90,10 +104,11 @@ export function renderAgingTable(
   startRow: number,
   rows: SoaExportRow[],
   totalLabel: string | null,
-  opts?: { includeSource?: boolean },
+  opts?: { includeSource?: boolean; includeNotes?: boolean },
 ): number {
   const includeSource = opts?.includeSource ?? false;
-  const columnCount = includeSource ? COLUMN_COUNT + 1 : COLUMN_COUNT;
+  const includeNotes = opts?.includeNotes ?? false;
+  const columnCount = includeSource ? COLUMN_COUNT + 1 : COLUMN_COUNT; // through PIC
   // Aging buckets start one column later, and Total/PIC each shift right by
   // one, whenever a Source column is inserted right after Company Name.
   const firstAgingCol = includeSource ? 3 : 2;
@@ -102,8 +117,8 @@ export function renderAgingTable(
 
   const headerRow = sheet.getRow(startRow);
   headerRow.values = includeSource
-    ? ['Company Name', 'Source', ...AGING_BUCKETS.map(b => SHEET_BUCKET_LABEL[b.key]), 'Total', 'PIC']
-    : ['Company Name', ...AGING_BUCKETS.map(b => SHEET_BUCKET_LABEL[b.key]), 'Total', 'PIC'];
+    ? ['Company Name', 'Source', ...AGING_BUCKETS.map(b => SHEET_BUCKET_LABEL[b.key]), 'Total', 'PIC', ...(includeNotes ? ['REMARKS', 'REMINDER'] : [])]
+    : ['Company Name', ...AGING_BUCKETS.map(b => SHEET_BUCKET_LABEL[b.key]), 'Total', 'PIC', ...(includeNotes ? ['REMARKS', 'REMINDER'] : [])];
   headerRow.font = BOLD;
   headerRow.eachCell(cell => { cell.alignment = { horizontal: 'center' }; cell.border = { bottom: { style: 'thin' } }; });
   headerRow.getCell(1).alignment = { horizontal: 'left' };
@@ -132,6 +147,7 @@ export function renderAgingTable(
       ...bucketInfo.map(b => b.amount),
       r.totalOutstanding,
       r.owner ?? '',
+      ...(includeNotes ? [r.remarks ?? '', r.reminder ?? ''] : []),
     ];
     // One net number per bucket cell (an Excel cell can't stack lines the
     // way the on-screen list now does — see this function's own header
@@ -153,6 +169,10 @@ export function renderAgingTable(
     row.getCell(1).alignment = { horizontal: 'left' };
     if (includeSource) row.getCell(2).alignment = { horizontal: 'center' };
     row.getCell(picCol).alignment = { horizontal: 'left' };
+    if (includeNotes) {
+      row.getCell(picCol + 1).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      row.getCell(picCol + 2).alignment = { horizontal: 'left', vertical: 'top' };
+    }
   }
 
   if (totalLabel !== null) {
@@ -190,6 +210,7 @@ export function renderAgingTable(
     totalRow.getCell(1).border = { top: { style: 'thin' } };
     if (includeSource) totalRow.getCell(2).border = { top: { style: 'thin' } };
     totalRow.getCell(picCol).border = { top: { style: 'thin' } };
+    if (includeNotes) for (let c = picCol + 1; c <= picCol + NOTE_COLUMNS; c++) totalRow.getCell(c).border = { top: { style: 'thin' } };
   }
 
   return rowNum + 1;
@@ -197,29 +218,31 @@ export function renderAgingTable(
 
 // One TAB/TAC/TAO-style sheet: legal name / "A/R Ageing Summary Report" /
 // "As of ..." title block, then the aging table with a labeled "TOTAL" row.
-export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany, rows: SoaCompanyRow[]) {
+export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany, rows: SoaCompanyRow[], notesFor?: SoaNotesFor) {
   const sheet = workbook.addWorksheet(company);
+  const includeNotes = !!notesFor;
+  const columnCount = COLUMN_COUNT + (includeNotes ? NOTE_COLUMNS : 0);
 
-  sheet.mergeCells(1, 1, 1, COLUMN_COUNT);
+  sheet.mergeCells(1, 1, 1, columnCount);
   sheet.getCell(1, 1).value = LEGAL_NAME[company];
   sheet.getCell(1, 1).font = { ...BOLD, size: 13 };
   sheet.getCell(1, 1).alignment = { horizontal: 'center' };
 
-  sheet.mergeCells(2, 1, 2, COLUMN_COUNT);
+  sheet.mergeCells(2, 1, 2, columnCount);
   sheet.getCell(2, 1).value = 'A/R Ageing Summary Report';
   sheet.getCell(2, 1).font = BOLD;
   sheet.getCell(2, 1).alignment = { horizontal: 'center' };
 
-  sheet.mergeCells(3, 1, 3, COLUMN_COUNT);
+  sheet.mergeCells(3, 1, 3, columnCount);
   sheet.getCell(3, 1).value = `As of ${new Date().toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' })}`;
   sheet.getCell(3, 1).alignment = { horizontal: 'center' };
 
   const headerRowNum = 5;
-  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r) }));
-  renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL');
+  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r), ...(notesFor ? notesFor(r, company) : {}) }));
+  renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeNotes });
 
-  setColumnWidths(sheet);
-  sheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum, column: COLUMN_COUNT } };
+  setColumnWidths(sheet, false, includeNotes);
+  sheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum, column: columnCount } };
   sheet.views = [{ state: 'frozen', ySplit: headerRowNum }];
   return sheet;
 }
@@ -233,9 +256,10 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
 // own All-before-TAB/TAC/TAO ordering; there's no real tab on Vincent's own
 // Google Sheet to match here (it has no "All" tab), so this is free to
 // follow the app's own new convention instead.
-export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWithSource[]) {
+export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWithSource[], notesFor?: SoaNotesFor) {
   const sheet = workbook.addWorksheet('All');
-  const columnCount = COLUMN_COUNT + 1;
+  const includeNotes = !!notesFor;
+  const columnCount = COLUMN_COUNT + 1 + (includeNotes ? NOTE_COLUMNS : 0);
 
   sheet.mergeCells(1, 1, 1, columnCount);
   sheet.getCell(1, 1).value = 'All Systems Combined (TAB + TAC + TAO)';
@@ -254,10 +278,11 @@ export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWit
   const headerRowNum = 5;
   const rowsForTable = rows.map(r => ({
     companyName: r.companyName, source: r.qbCompany, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
+    ...(notesFor ? notesFor(r, r.qbCompany) : {}),
   }));
-  renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeSource: true });
+  renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeSource: true, includeNotes });
 
-  setColumnWidths(sheet, true);
+  setColumnWidths(sheet, true, includeNotes);
   sheet.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum, column: columnCount } };
   sheet.views = [{ state: 'frozen', ySplit: headerRowNum }];
   return sheet;

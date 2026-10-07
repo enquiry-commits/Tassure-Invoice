@@ -3,8 +3,11 @@ import { todaySGT } from '@/lib/date';
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
-import { computeSoaRows, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
-import { buildAllSheet, buildCompanySheet } from '@/lib/soa-export';
+import { createAdminClient } from '@/lib/supabase';
+import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
+import { buildAllSheet, buildCompanySheet, type SoaNotesFor } from '@/lib/soa-export';
+import { loadSoaReminderHistory, resolveSoaReminderProgress } from '@/lib/soa-reminder-progress';
+import { loadSoaRemarks, soaRemarksForCompany } from '@/lib/soa-remarks';
 
 // GET /api/billing/soa/export-all — Vincent, 2026-09-07: "另外要生成一个完
 // 整版的EXCEL（和GOOGLE SHEET 那边的一样的），要有 TAB/TAC/TAO/每个人员的/
@@ -21,8 +24,27 @@ import { buildAllSheet, buildCompanySheet } from '@/lib/soa-export';
 // request brings this back rather than re-deriving it from scratch.
 export async function GET() {
   let tab: SoaCompanyRow[], tac: SoaCompanyRow[], tao: SoaCompanyRow[];
+  let notesFor: SoaNotesFor;
   try {
-    [tab, tac, tao] = await Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]);
+    const admin = createAdminClient();
+    const [rows, history, remarks] = await Promise.all([
+      Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]),
+      loadSoaReminderHistory(admin),
+      loadSoaRemarks(admin),
+    ]);
+    [tab, tac, tao] = rows;
+    // Same Remarks (one shared note per company) and Reminder status (per
+    // company + system, from verified Outlook sends) the on-screen list shows.
+    notesFor = (row, source) => {
+      const progress = resolveSoaReminderProgress(history, row, source);
+      const sent = progress.completedAt
+        ? new Date(progress.completedAt).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Singapore' })
+        : null;
+      return {
+        remarks: soaRemarksForCompany(remarks, row.companyName),
+        reminder: progress.completedLabel ? `${progress.completedLabel}${sent ? ` — ${sent}` : ''}` : 'Not sent',
+      };
+    };
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
   }
@@ -32,9 +54,15 @@ export async function GET() {
   // app/billing/soa/_components.tsx's picScoped comment for the full
   // reasoning (including why this stays a live filter, not a stored one).
   // Filtered once here, before any sheet builder reads them.
-  tab = tab.filter(r => r.totalOutstanding > 0);
-  tac = tac.filter(r => r.totalOutstanding > 0);
-  tao = tao.filter(r => r.totalOutstanding > 0);
+  // 2026-10-07, Vincent: the workbook must also leave out the rows the
+  // on-screen list hides — a company with no PIC at all (no confirmed or
+  // suggested owner, e.g. the QuickBooks customer named "0", "143 LIVE").
+  // Same rule as app/billing/soa/_components.tsx's hasAnyPic; still a live
+  // filter, so a company reappears once it gets a PIC.
+  const visible = (r: SoaCompanyRow) => r.totalOutstanding > 0 && (r.picOptions.length > 0 || !!effectiveOwner(r));
+  tab = tab.filter(visible);
+  tac = tac.filter(visible);
+  tao = tao.filter(visible);
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Tassure';
@@ -44,11 +72,11 @@ export async function GET() {
   // second round trip to Supabase, and provably the same row set the
   // on-screen All page's own computeAllSoaRows() call would produce (same
   // shared tagAndMergeSoaRows() helper, see lib/soa-data.ts).
-  buildAllSheet(workbook, tagAndMergeSoaRows(tab, tac, tao));
+  buildAllSheet(workbook, tagAndMergeSoaRows(tab, tac, tao), notesFor);
 
   // Real tab order on his sheet is TAB, TAO, TAC — not alphabetical.
   const byCompany: [QbCompany, SoaCompanyRow[]][] = [['TAB', tab], ['TAO', tao], ['TAC', tac]];
-  for (const [company, rows] of byCompany) buildCompanySheet(workbook, company, rows);
+  for (const [company, rows] of byCompany) buildCompanySheet(workbook, company, rows, notesFor);
 
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
   const fileName = `SOA - Full Workbook - ${todaySGT()}.xlsx`;

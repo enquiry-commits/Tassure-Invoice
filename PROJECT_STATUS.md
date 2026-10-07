@@ -7490,3 +7490,25 @@ a reviewer can check it before anything is created.
   OpenAI not Claude because Reports' AI has run on OpenAI since 2026-09-23
   (Anthropic credit). Validation unit-tested; NOT yet tried against the live
   model (no OPENAI_API_KEY locally) — first real use is after deploy.
+
+## 2026-10-07 — SOA "Export Full Workbook": hidden rows left out + REMARKS / REMINDER columns
+
+- Vincent: the full workbook must not contain the rows the on-screen Outstanding
+  list hides (companies with no PIC at all, e.g. the QuickBooks customer "0",
+  "143 LIVE PTE. LTD."), and needs two more columns after PIC — REMARKS and
+  REMINDER — taken from what the system already records.
+- `app/api/billing/soa/export-all/route.ts`: applies the same live rule as the
+  page's `hasAnyPic` (`picOptions.length > 0 || effectiveOwner(row)`) on top of
+  `totalOutstanding > 0`; REMARKS = the shared per-company `soa_remarks` note,
+  REMINDER = the latest verified-send status per company + system
+  (`resolveSoaReminderProgress`), e.g. "1st Reminder (Done) — 24 Sept 2026" or
+  "Not sent". Same helpers the page API uses, so the two cannot drift.
+- `lib/soa-export.ts`: optional `notesFor` on `buildAllSheet`/`buildCompanySheet`
+  adds the two columns (widths 44/34, filter + title merge cover them). Fixed
+  `COLUMN_COUNT` (was 9, real 8 — one too many, left the filter/title merge a
+  column too wide). The single-sheet export (`/api/billing/soa/export`) is
+  untouched: it keeps its old columns and old row set.
+- Verified by generating the real workbook read-only: All 400 rows = TAB 218 +
+  TAO 130 + TAC 52; "0" and "143 LIVE" absent; columns/widths/filter correct.
+  REMARKS is empty everywhere today because nobody has entered a remark yet
+  (`soa_remarks` has 0 rows) — not a read failure.
