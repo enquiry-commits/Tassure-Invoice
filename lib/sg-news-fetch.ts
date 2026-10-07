@@ -1,4 +1,5 @@
 import 'server-only';
+import { attachLinks, type PageLink } from './sg-news-links';
 import type { Browser } from 'playwright-core';
 import { removeStalePlaywrightTempDirs, withPlaywrightRetry } from './playwright-tmp-cleanup';
 import type { SgNewsSource } from './sg-news-sources';
@@ -48,7 +49,7 @@ const RENDER_SETTLE_MS = 2500;
 // matter, and recent items are always first on every source checked.
 const MAX_RAW_CHARS = 20_000;
 
-async function fetchRenderedText(url: string): Promise<string> {
+async function fetchRenderedText(url: string): Promise<{ text: string; links: PageLink[] }> {
   return withPlaywrightRetry(async () => {
     const browser = await launchBrowser();
     try {
@@ -59,7 +60,13 @@ async function fetchRenderedText(url: string): Promise<string> {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForTimeout(RENDER_SETTLE_MS);
       const text = await page.evaluate(() => document.body.innerText);
-      return text.slice(0, MAX_RAW_CHARS);
+      // The text above has no hrefs, so also take the page's real anchors; each extracted
+      // headline is matched to one by title afterwards (lib/sg-news-links.ts).
+      const links = await page.evaluate(() => Array.from(document.querySelectorAll('a[href]'))
+        .map(a => ({ text: ((a as HTMLElement).innerText || a.textContent || '').trim().replace(/\s+/g, ' '), href: (a as HTMLAnchorElement).href }))
+        .filter(l => l.text.length >= 12 && /^https?:/i.test(l.href))
+        .slice(0, 800));
+      return { text: text.slice(0, MAX_RAW_CHARS), links };
     } finally {
       await browser.close();
     }
@@ -122,9 +129,9 @@ async function extractItems(source: SgNewsSource, rawText: string, usage: AiUsag
 // `usage`: the daily cron (system) or a manual run, for the AI usage ledger (INV-AI-010).
 export async function fetchAndExtractSource(source: SgNewsSource, usage: AiUsageTag): Promise<{ items: ExtractedNewsItem[] } | { error: string }> {
   try {
-    const rawText = await fetchRenderedText(source.url);
+    const { text: rawText, links } = await fetchRenderedText(source.url);
     if (!rawText.trim()) return { error: 'Page rendered empty content.' };
-    const items = await extractItems(source, rawText, usage);
+    const items = attachLinks(await extractItems(source, rawText, usage), links, source.url);
     return { items };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

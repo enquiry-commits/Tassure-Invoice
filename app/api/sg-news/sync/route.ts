@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeNewsTitle } from '@/lib/sg-news-links';
 import { createAdminClient } from '@/lib/supabase';
 import { withAutomationRun, type AutomationRun } from '@/lib/automation-sync';
 import { getRequestAccount } from '@/lib/request-account';
@@ -31,9 +32,7 @@ export const preferredRegion = 'sin1';
 // Bhd"/FKA-clauses, which is company-name-specific and irrelevant (and
 // could even wrongly collide two different real headlines) for arbitrary
 // news titles from 9 unrelated sites.
-function normalizeTitle(title: string): string {
-  return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-}
+const normalizeTitle = normalizeNewsTitle;
 
 async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextResponse> {
   const supabase = createAdminClient();
@@ -57,8 +56,9 @@ async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextRe
 
     // Existing hashes for THIS source only — a title colliding across two
     // different sources is not a real duplicate.
-    const { data: existing } = await supabase.from('sg_news_items').select('item_hash').eq('source', source.key);
+    const { data: existing } = await supabase.from('sg_news_items').select('item_hash, url').eq('source', source.key);
     const knownHashes = new Set((existing ?? []).map(r => r.item_hash));
+    const hashesMissingUrl = new Set((existing ?? []).filter(r => !r.url).map(r => r.item_hash));
 
     const freshItems: ExtractedNewsItem[] = [];
     const now = new Date().toISOString();
@@ -67,7 +67,9 @@ async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextRe
       if (!hash) continue;
       if (knownHashes.has(hash)) {
         // Seen before — just touch last_seen_at, not a new item for today's digest.
-        await supabase.from('sg_news_items').update({ last_seen_at: now }).eq('source', source.key).eq('item_hash', hash);
+        // An item stored before links were collected has no url — fill it in now that the page's
+        // anchors give one (this is what gives older reports their source links).
+        await supabase.from('sg_news_items').update(hashesMissingUrl.has(hash) && item.url ? { last_seen_at: now, url: item.url } : { last_seen_at: now }).eq('source', source.key).eq('item_hash', hash);
         continue;
       }
       freshItems.push(item);

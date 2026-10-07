@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Newspaper, RefreshCw, Scale, Globe2, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Newspaper, RefreshCw, Scale, Globe2, AlertTriangle, CheckCircle2, Clock, ExternalLink } from 'lucide-react';
 
 // "SG Latest News" — Vincent, 2026-09-23: daily ACRA/IRAS/MOM/ICA/ISCA/CSIS
 // (policy) + Straits Times/Business Times/Zaobao (news) monitoring, for
@@ -15,6 +15,7 @@ type SgNewsDigestItem = {
   source: string; category: 'policy' | 'news';
   title: string; url: string | null; publishedLabel: string | null;
   whatChanged: string; whyItMatters: string;
+  sourcePageUrl?: string | null; // the source's own listing page — fallback when the item has no link of its own
 };
 type DailyReport = {
   report_date: string; new_items_count: number;
@@ -26,9 +27,17 @@ type SyncState = { source: string; last_status: string; last_synced_at: string |
 
 const COLORS = { ink: '#102a43', teal: '#397f78', blue: '#557795', gold: '#b98243', rose: '#b45f6b' };
 
+// "www.straitstimes.com" -> "straitstimes.com"; falls back to the raw text if it isn't a URL.
+function sourceHost(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+// Four equal cards per row on a wide screen; fewer when narrow (never narrower than 240px).
+const CARD_GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(max(240px, calc((100% - 42px) / 4)), 1fr))', gap: 14, alignItems: 'stretch' } as const;
+
 function ItemCard({ item }: { item: SgNewsDigestItem }) {
   return (
-    <div style={{ padding: '14px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff' }}>
+    <div style={{ padding: '14px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: COLORS.teal, background: '#edf4f3', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '.03em' }}>{item.source}</span>
         {item.publishedLabel && <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.publishedLabel}</span>}
@@ -39,6 +48,23 @@ function ItemCard({ item }: { item: SgNewsDigestItem }) {
       <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.7, color: '#334155' }}>{item.whatChanged}</div>
       <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 7, background: '#f8fafc', fontSize: 12, lineHeight: 1.6, color: '#64748b' }}>
         <strong style={{ color: '#475569' }}>为什么重要：</strong>{item.whyItMatters}
+      </div>
+      {/* Source link — always the last line of the card, pinned to the bottom so a row of
+          cards lines up even when their text lengths differ. */}
+      <div style={{ marginTop: 'auto', paddingTop: 12 }}>
+        {item.url
+          ? <a href={item.url} target="_blank" rel="noreferrer" title={item.url}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11.5, fontWeight: 700, color: COLORS.teal, textDecoration: 'none' }}>
+              <ExternalLink size={12} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>来源 · {sourceHost(item.url)}</span>
+            </a>
+          : item.sourcePageUrl
+            ? <a href={item.sourcePageUrl} target="_blank" rel="noreferrer" title={item.sourcePageUrl}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11.5, fontWeight: 600, color: '#64748b', textDecoration: 'none' }}>
+                <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>来源页 · {sourceHost(item.sourcePageUrl)}</span>
+              </a>
+            : <span style={{ fontSize: 11.5, color: '#94a3b8' }}>来源：{item.source}</span>}
       </div>
     </div>
   );
@@ -152,7 +178,7 @@ export default function SgNewsPage() {
               <h2 style={{ fontSize: 14, fontWeight: 750, color: COLORS.ink, margin: 0 }}>政策层面变化 — ACRA / IRAS / MOM / ICA / ISCA / CSIS</h2>
             </div>
             {report.report.policyItems.length
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{report.report.policyItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
+              ? <div style={CARD_GRID}>{report.report.policyItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
               : <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '10px 0' }}>今天政策类来源没有发现新内容。</div>}
           </div>
 
@@ -162,7 +188,7 @@ export default function SgNewsPage() {
               <h2 style={{ fontSize: 14, fontWeight: 750, color: COLORS.ink, margin: 0 }}>新闻层面变化 — Straits Times / Business Times / 联合早报</h2>
             </div>
             {report.report.newsItems.length
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{report.report.newsItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
+              ? <div style={CARD_GRID}>{report.report.newsItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
               : <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '10px 0' }}>今天新闻类来源没有发现新内容。</div>}
           </div>
         </>

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SG_NEWS_SOURCES } from '@/lib/sg-news-sources';
+import { normalizeNewsTitle } from '@/lib/sg-news-links';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { todaySGT } from '@/lib/date';
@@ -46,9 +48,24 @@ export async function GET(req: NextRequest) {
     supabase.from('sg_news_sync_state').select('*').order('source', { ascending: true }),
   ]);
 
+  // Older reports were generated before links were collected: resolve each item's url from the
+  // stored item (same source + normalised title) and always give the source's listing page as
+  // a fallback, so every card has something real to open.
+  let enriched = report ?? null;
+  if (enriched?.report) {
+    const { data: stored } = await supabase.from('sg_news_items').select('source, item_hash, url').not('url', 'is', null);
+    const urlByKey = new Map((stored ?? []).map(r => [`${r.source}|${r.item_hash}`, r.url as string]));
+    const keyByName = new Map(SG_NEWS_SOURCES.map(s => [s.name.toLowerCase(), s]));
+    const withLinks = (it: { source: string; title: string; url: string | null }) => {
+      const src = keyByName.get(String(it.source).toLowerCase());
+      return { ...it, url: it.url ?? (src ? urlByKey.get(`${src.key}|${normalizeNewsTitle(it.title)}`) ?? null : null), sourcePageUrl: src?.url ?? null };
+    };
+    enriched = { ...enriched, report: { ...enriched.report, policyItems: (enriched.report.policyItems ?? []).map(withLinks), newsItems: (enriched.report.newsItems ?? []).map(withLinks) } };
+  }
+
   return NextResponse.json({
     today: todaySGT(),
-    report: report ?? null,
+    report: enriched,
     history: history ?? [],
     syncState: syncState ?? [],
   });

@@ -7512,3 +7512,21 @@ a reviewer can check it before anything is created.
   TAO 130 + TAC 52; "0" and "143 LIVE" absent; columns/widths/filter correct.
   REMARKS is empty everywhere today because nobody has entered a remark yet
   (`soa_remarks` has 0 rows) — not a read failure.
+
+## 2026-10-07 — SG Latest News: 4 cards per row + source links
+
+- Cards are now a grid of four equal columns (`auto-fit`, never narrower than 240px)
+  instead of a single stacked list; each card ends with a source link pinned to the
+  bottom.
+- Root cause of "no source links": the fetcher read only `document.body.innerText`
+  (no hrefs) and the extractor was told to omit a url it couldn't find, so every
+  stored item (and report item) had `url: null`. Now `lib/sg-news-fetch.ts` also
+  collects the page's anchors and `lib/sg-news-links.ts` matches them to each
+  extracted headline by normalised title (deterministic, never model-written);
+  the sync route also fills `url` on already-stored items that lacked one.
+- `/api/sg-news` resolves each report item's url from the stored item and adds the
+  source's listing page as `sourcePageUrl`; the card shows "来源 · host" when it has
+  the article link, else "来源页 · host" (listing page) — so every card links
+  somewhere real today, and gets the article link after the next sync.
+- NOT run against the live sites here (Playwright scrape; needs the deployed cron or
+  the manual "手动运行一次"); the title→link matcher is unit-tested only.
