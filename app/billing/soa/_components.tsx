@@ -1045,7 +1045,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         </div>
         <div style={{ padding: '0 6px', textAlign: 'center' }}>
-          {isOverpaid(c.totalOutstanding) && !opts.child ? <WeOweBadge amount={c.totalOutstanding} /> : <SoaReminderStatus progress={c.reminderProgress} />}
+          {/* Only the company's own (grey) row shows the Reminder; an expanded source row stays blank (Vincent, 2026-10-07). */}
+          {opts.child ? null : isOverpaid(c.totalOutstanding) ? <WeOweBadge amount={c.totalOutstanding} /> : <SoaReminderStatus progress={c.reminderProgress} />}
         </div>
         {/* Clickable Source badge downloads that book's own SOA PDF — see
             downloadSourceBadge's own comment above for the full request. */}
