@@ -41,6 +41,17 @@ function fmtMoney(n: number) {
 function fmtNum(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// A net balance below zero = the client has paid us MORE than it was billed, so WE owe THEM (Vincent,
+// 2026-10-07: "如果客户多付款了，我们也需要知道"). Shown as a red negative; never a collections target.
+const isOverpaid = (net: number) => net < 0;
+function WeOweBadge({ amount }: { amount: number }) {
+  return (
+    <span title={`This client has paid S$${fmtNum(-amount)} more than it was billed — we owe it money`}
+      style={{ display: 'inline-block', padding: '3px 7px', borderRadius: 6, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+      We owe client
+    </span>
+  );
+}
 function allCompanyGroupKey(companyName: string) {
   return normalize(companyName) || companyName.trim().toLowerCase();
 }
@@ -572,6 +583,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [companies, setCompanies] = useState<Row[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [overpaidOnly, setOverpaidOnly] = useState(false); // the Overpaid card: show only clients we owe money
   // Vincent, 2026-10-04, on the single-select "My book" picker: "这个默认是
   // All, 但是我要变成可以多选的, 方便Leader查看部门的人员欠款多少, 所以这边
   // 的显示可以按部门区分, 然后分别Leader按照部门选择最近的员工" — multi-
@@ -715,7 +727,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // companies — PICs selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
   useEffect(() => {
-    setSearch(''); setPicFilters([]); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
+    setSearch(''); setOverpaidOnly(false); setPicFilters([]); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
   }, [qbCompany]);
 
   // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
@@ -835,7 +847,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     // LTD. $4,450) — see PROJECT_STATUS.md's 2026-09-28 entry for the full
     // list; those may need a Main PIC assigned rather than staying hidden.
     const hasAnyPic = (c: Row) => c.picOptions.length > 0 || !!effectiveOwner(c);
-    const list = (companies ?? []).filter(c => c.totalOutstanding > 0 && hasAnyPic(c));
+    // 2026-10-07, Vincent: a NEGATIVE net now shows (red) so overpayments are visible; Total = 0 stays hidden as
+    // decided on 2026-09-16. Still recomputed live every render.
+    const list = (companies ?? []).filter(c => c.totalOutstanding !== 0 && hasAnyPic(c));
     if (!picFilters.length) return list;
     const selectedSet = new Set(picFilters);
     const ownsRow = (c: Row) => {
@@ -863,10 +877,15 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // find-one-company tool within whatever scope is active.
   const counts = useMemo(() => {
     const list = picScoped;
+    // Total Outstanding is the NET: what clients owe minus what they overpaid (Vincent, 2026-10-07).
     const totalOutstanding = list.reduce((s, c) => s + c.totalOutstanding, 0);
+    // The aging table's own CURRENT column, summed.
+    const current = list.reduce((s, c) => s + c.aging.current, 0);
     if (qbCompany !== 'ALL') {
       const seriouslyOverdue = list.filter(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0).length;
-      return { total: list.length, totalOutstanding, seriouslyOverdue };
+      const owing = list.filter(c => c.totalOutstanding > 0);
+      const over = list.filter(c => isOverpaid(c.totalOutstanding));
+      return { total: owing.length, totalOutstanding, current, seriouslyOverdue, overpaidCount: over.length, overpaidAmount: over.reduce((s, c) => s - c.totalOutstanding, 0) };
     }
     const groups = new Map<string, Row[]>();
     for (const row of list) {
@@ -874,15 +893,27 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     const seriouslyOverdue = [...groups.values()].filter(rows => rows.some(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0)).length;
-    return { total: groups.size, totalOutstanding, seriouslyOverdue };
+    const nets = [...groups.values()].map(rows => rows.reduce((s, c) => s + c.totalOutstanding, 0));
+    return {
+      total: nets.filter(n => n > 0).length, totalOutstanding, current, seriouslyOverdue,
+      overpaidCount: nets.filter(isOverpaid).length, overpaidAmount: nets.filter(isOverpaid).reduce((s, n) => s - n, 0),
+    };
   }, [picScoped, qbCompany]);
 
   const filtered = useMemo(() => {
     let list = picScoped;
     const q = search.trim().toLowerCase();
     if (q) list = list.filter(c => c.companyName.toLowerCase().includes(q));
+    if (overpaidOnly) {
+      if (qbCompany === 'ALL') {
+        // in All a client is one card across its books — judged by its combined net
+        const net = new Map<string, number>();
+        for (const c of list) { const k = allCompanyGroupKey(c.companyName); net.set(k, (net.get(k) ?? 0) + c.totalOutstanding); }
+        list = list.filter(c => isOverpaid(net.get(allCompanyGroupKey(c.companyName)) ?? 0));
+      } else list = list.filter(c => isOverpaid(c.totalOutstanding));
+    }
     return list;
-  }, [picScoped, search]);
+  }, [picScoped, search, overpaidOnly, qbCompany]);
 
   const allGroups: AllCompanyGroup[] = (() => {
     if (qbCompany !== 'ALL') return [];
@@ -1029,7 +1060,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         </div>
         <div style={{ padding: '0 6px', textAlign: 'center' }}>
-          <SoaReminderStatus progress={c.reminderProgress} />
+          {isOverpaid(c.totalOutstanding) && !opts.child ? <WeOweBadge amount={c.totalOutstanding} /> : <SoaReminderStatus progress={c.reminderProgress} />}
         </div>
         {/* Clickable Source badge downloads that book's own SOA PDF — see
             downloadSourceBadge's own comment above for the full request. */}
@@ -1040,8 +1071,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           return (
             <div style={{ textAlign: 'center' }}>
               <button title={badgeError ?? `Download ${rowCompany(c)} SOA PDF`}
-                onClick={event => { event.stopPropagation(); void downloadSourceBadge(badgeKey, c.companyName, rowCompany(c)); }}
-                disabled={isDownloading}
+                onClick={event => { event.stopPropagation(); if (!(isOverpaid(c.totalOutstanding) && !opts.child)) void downloadSourceBadge(badgeKey, c.companyName, rowCompany(c)); }}
+                disabled={isDownloading || (isOverpaid(c.totalOutstanding) && !opts.child)}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
                   padding: '2px 7px', borderRadius: 5, border: 'none', cursor: isDownloading ? 'default' : 'pointer',
@@ -1106,7 +1137,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               TAO source balance, etc.) drafting separately would split one
               client's reminder into multiple emails, which is never the
               intent (see buildSoaDraft's own combined-total behavior). */}
-          {!opts.child && (
+          {!opts.child && !isOverpaid(c.totalOutstanding) && (
             <SoaDraftPopover
               company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
               senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
@@ -1158,11 +1189,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       )}
 
       {companies !== null && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10, marginBottom: 16 }}>
           <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub="owed minus overpaid (net)"
             icon={<Receipt size={16} />} color="#0f766e" />
+          <MetricCard value={<MoneyValue amount={counts.current} />} label="Current" sub="not yet due (the Current column)"
+            icon={<Receipt size={16} />} color="#1d3a5c" />
+          <MetricCard value={<span style={{ color: counts.overpaidCount ? 'var(--status-danger)' : undefined }}><MoneyValue amount={-counts.overpaidAmount} /></span>}
+            label="Overpaid — we owe clients" sub={overpaidOnly ? 'showing only these · click to show all' : `${counts.overpaidCount} client${counts.overpaidCount === 1 ? '' : 's'} · click to list them`}
+            icon={<AlertTriangle size={16} />} color="var(--status-danger)" active={overpaidOnly} onClick={() => setOverpaidOnly(v => !v)} ariaLabel="Show only clients who overpaid" />
           <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilters.length ? `${picFilterLabel}'s book` : 'needs a statement sent soon'}
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
         </div>
@@ -1290,7 +1326,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         </button>
                       </div>
                       <div style={{ padding: '0 6px', textAlign: 'center' }}>
-                        <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
+                        {isOverpaid(combined.totalOutstanding)
+                          ? <WeOweBadge amount={combined.totalOutstanding} />
+                          : <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />}
                       </div>
                       {/* ONE click target for the whole badge group, not one
                           button per badge — Vincent, 2026-09-23, after seeing
@@ -1327,9 +1365,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           title={groupBadgeErrors.length ? `Download failed — ${groupBadgeErrors.join(' | ')}` : sources.length > 1 ? `Download ${sources.join(' + ')} SOA PDFs` : `Download ${sources[0]} SOA PDF`}
                           onClick={event => {
                             event.stopPropagation();
+                            if (isOverpaid(combined.totalOutstanding)) return;
                             for (const source of sources) void downloadSourceBadge(`${group.key}:${source}`, group.companyName, source);
                           }}
-                          disabled={sources.some(source => downloadingBadges.has(`${group.key}:${source}`))}
+                          disabled={isOverpaid(combined.totalOutstanding) || sources.some(source => downloadingBadges.has(`${group.key}:${source}`))}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', whiteSpace: 'nowrap',
                             border: '1px solid #b8c7d6', borderRadius: 6, background: '#fff', padding: '3px 8px', cursor: 'pointer',
@@ -1353,7 +1392,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         const value = combined.aging[bucket.key];
                         return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontFamily: 'Arial, Helvetica, sans-serif', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
                       })}
-                      <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
+                      <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
                       </div>
@@ -1399,13 +1438,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           吗". Removed — this cell never needs to out-rank
                           the header again. */}
                       <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
-                        <SoaDraftPopover
+                        {!isOverpaid(combined.totalOutstanding) && <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
                           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
                           templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
                           isOpen={draftPopoverFor === groupDraftKey} onOpenChange={open => setDraftPopoverFor(open ? groupDraftKey : null)}
                           variant="icon" onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
-                        />
+                        />}
                       </div>
                     </div>
 
@@ -1598,7 +1637,12 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+      {isOverpaid(company.totalOutstanding) && (
+        <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 8, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 12.5, fontWeight: 700 }}>
+          We owe this client S${fmtNum(-company.totalOutstanding)} (it paid more than it was billed) — no collection statement or reminder is offered.
+        </div>
+      )}
+      <div style={{ display: isOverpaid(company.totalOutstanding) ? 'none' : 'flex', justifyContent: 'flex-end', gap: 10 }}>
         {/* 'ALL' mode: a choice (each book with a real balance, plus the
             merged PDF as its own explicit last option) rather than one
             button that always merges — see SoaDownloadPopover's own

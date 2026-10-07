@@ -5769,3 +5769,22 @@ again.
   expanded source children, while each envelope remains source-specific.
   Multi-source groups start expanded; collapsing one is only a temporary UI
   preference and does not alter balances, reminder stages, owners or remarks.
+
+- **INV-DATA-078** — The SOA Outstanding list shows a client whose NET balance is
+  negative (it paid more than it was billed — we owe IT), as a red negative
+  in Total; only a net of exactly 0 stays hidden. Vincent, 2026-10-07 ("如果
+  客户多付款了，我们也需要知道"), narrowing his 2026-09-16 "hide 0 and
+  negative". Total Outstanding is the NET (owed minus overpaid); the Current
+  card is the CURRENT aging column's sum; the Overpaid card is the sum and
+  count of negative-net clients and a click lists only them. In All a client
+  is judged on its COMBINED net. A negative-net row shows "We owe client"
+  instead of the Reminder and has no Draft Email / SOA PDF — never a
+  collection reminder to a client that overpaid. Collections consumers stay
+  on `totalOutstanding > 0` and must NOT be widened: My Tasks SOA
+  Collections, the assistant's outstanding lookup, SOA draft / comms
+  resolution. The full workbook lists negatives too (TOTAL = net) and has one
+  sheet per person after All / TAB / TAO / TAC (`lib/soa-person-book.ts`): the
+  SAME rule as the page's "My book" (Main PIC via `derivedOwner`, INV-PIC-009,
+  else the PIC options) keeping the person's whole client card — every
+  source, even ones someone else owns. The single-sheet export is unchanged.
+  Guarded by `test-soa-person-book.ts`.

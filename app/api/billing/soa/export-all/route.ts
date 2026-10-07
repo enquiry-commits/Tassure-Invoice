@@ -6,6 +6,7 @@ import type { QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { buildAllSheet, buildCompanySheet, type SoaNotesFor } from '@/lib/soa-export';
+import { peopleWithBooks, personLabel, rowsInPersonBook, sheetNameForPerson } from '@/lib/soa-person-book';
 import { loadSoaReminderHistory, resolveSoaReminderProgress } from '@/lib/soa-reminder-progress';
 import { loadSoaRemarks, soaRemarksForCompany } from '@/lib/soa-remarks';
 
@@ -43,7 +44,8 @@ export async function GET() {
         : null;
       return {
         remarks: soaRemarksForCompany(remarks, row.companyName),
-        reminder: progress.completedLabel ? `${progress.completedLabel}${sent ? ` — ${sent}` : ''}` : 'Not sent',
+        // A client that paid more than it was billed gets no collection reminder.
+        reminder: row.totalOutstanding < 0 ? 'We owe client (overpaid)' : progress.completedLabel ? `${progress.completedLabel}${sent ? ` — ${sent}` : ''}` : 'Not sent',
       };
     };
   } catch (err) {
@@ -60,7 +62,8 @@ export async function GET() {
   // suggested owner, e.g. the QuickBooks customer named "0", "143 LIVE").
   // Same rule as app/billing/soa/_components.tsx's hasAnyPic; still a live
   // filter, so a company reappears once it gets a PIC.
-  const visible = (r: SoaCompanyRow) => r.totalOutstanding > 0 && (r.picOptions.length > 0 || !!effectiveOwner(r));
+  // 2026-10-07: a NEGATIVE net (the client overpaid — we owe it) is listed too, as a negative; a net of exactly 0 stays out.
+  const visible = (r: SoaCompanyRow) => r.totalOutstanding !== 0 && (r.picOptions.length > 0 || !!effectiveOwner(r));
   tab = tab.filter(visible);
   tac = tac.filter(visible);
   tao = tao.filter(visible);
@@ -73,11 +76,22 @@ export async function GET() {
   // second round trip to Supabase, and provably the same row set the
   // on-screen All page's own computeAllSoaRows() call would produce (same
   // shared tagAndMergeSoaRows() helper, see lib/soa-data.ts).
-  buildAllSheet(workbook, tagAndMergeSoaRows(tab, tac, tao), notesFor);
+  const allRows = tagAndMergeSoaRows(tab, tac, tao);
+  buildAllSheet(workbook, allRows, notesFor);
 
   // Real tab order on his sheet is TAB, TAO, TAC — not alphabetical.
   const byCompany: [QbCompany, SoaCompanyRow[]][] = [['TAB', tab], ['TAO', tao], ['TAC', tac]];
   for (const [company, rows] of byCompany) buildCompanySheet(workbook, company, rows, notesFor);
+
+  // One sheet per person (Chelsea, 2026-10-07): their Main-PIC rows plus the OTHER sources of the same clients, the same
+  // rule as the page's "My book" (lib/soa-person-book.ts). Placed after All / TAB / TAO / TAC.
+  const taken = new Set(['all', 'tab', 'tao', 'tac']);
+  for (const person of peopleWithBooks(allRows)) {
+    buildAllSheet(workbook, rowsInPersonBook(allRows, person), notesFor, {
+      sheetName: sheetNameForPerson(person, taken),
+      title: `${personLabel(person)} \u2014 book (TAB + TAC + TAO)`,
+    });
+  }
 
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
   const fileName = `SOA - Full Workbook - ${todaySGT()}.xlsx`;

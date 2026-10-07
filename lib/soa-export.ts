@@ -256,13 +256,13 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
 // own All-before-TAB/TAC/TAO ordering; there's no real tab on Vincent's own
 // Google Sheet to match here (it has no "All" tab), so this is free to
 // follow the app's own new convention instead.
-export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWithSource[], notesFor?: SoaNotesFor) {
-  const sheet = workbook.addWorksheet('All');
+export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWithSource[], notesFor?: SoaNotesFor, opts?: { sheetName?: string; title?: string }) {
+  const sheet = workbook.addWorksheet(opts?.sheetName ?? 'All');
   const includeNotes = !!notesFor;
   const columnCount = COLUMN_COUNT + 1 + (includeNotes ? NOTE_COLUMNS : 0);
 
   sheet.mergeCells(1, 1, 1, columnCount);
-  sheet.getCell(1, 1).value = 'All Systems Combined (TAB + TAC + TAO)';
+  sheet.getCell(1, 1).value = opts?.title ?? 'All Systems Combined (TAB + TAC + TAO)';
   sheet.getCell(1, 1).font = { ...BOLD, size: 13 };
   sheet.getCell(1, 1).alignment = { horizontal: 'center' };
 
