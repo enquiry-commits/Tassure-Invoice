@@ -291,6 +291,8 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
   const [drilldown, setDrilldown] = useState<DrillDown | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  // Step 3 (fine-tune) starts folded away; opened only when someone wants finer control.
+  const [fineTuneOpen, setFineTuneOpen] = useState(false);
 
   function applyPreset(p: Preset) {
     setFilters(EMPTY_FILTERS);
@@ -500,13 +502,16 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
       </div>
 
       <section style={{ border: '1px solid #edf2f7', background: '#fbfdff', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+        <button type="button" onClick={() => setFineTuneOpen(o => !o)} aria-expanded={fineTuneOpen}
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginBottom: fineTuneOpen || chips.length > 0 ? 12 : 0 }}>
           <span style={{ ...STEP_BADGE, background: '#f1f5f9', color: '#64748b' }}>3</span>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={GUIDE_TITLE}>Fine-tune only if needed</div>
-            <div style={GUIDE_COPY}>After choosing a quick view or confirming an AI suggestion, these controls are optional adjustments.</div>
+            <div style={GUIDE_COPY}>{fineTuneOpen ? 'After choosing a quick view or confirming an AI suggestion, these controls are optional adjustments.' : 'Click to open — group by, count, Client Since range and “Only include” filters.'}</div>
           </div>
-        </div>
+          {fineTuneOpen ? <ChevronUp size={16} style={{ color: '#94a3b8', marginTop: 2 }} /> : <ChevronDown size={16} style={{ color: '#94a3b8', marginTop: 2 }} />}
+        </button>
+        {fineTuneOpen && (<>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', marginBottom: 12 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
             Group by
@@ -536,6 +541,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
               onApply={next => { setFilters(f => ({ ...f, [d.key]: next })); edited(); }} />
           ))}
         </div>
+        </>)}
         {chips.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
             <span style={STEP_LABEL}>Active filters:</span>
