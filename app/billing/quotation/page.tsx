@@ -87,6 +87,7 @@ function TracedInvoice({ inv, currency }: { inv: QuotationTraceInvoice; currency
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         <BillingInvoiceReference company={inv.source} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} muted={voided} />
         {voided && <span style={{ fontSize: 9, fontWeight: 700, color: '#b91c1c', letterSpacing: '.03em' }}>VOID</span>}
+        {inv.status === 'Paid' && <span title="This invoice has been paid in QuickBooks" style={{ fontSize: 9, fontWeight: 700, color: '#15803d', letterSpacing: '.03em' }}>✓ PAID</span>}
       </span>
       <span style={{ textAlign: 'right', fontSize: 11, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: inv.amountMatches ? 700 : 500, color: voided ? '#94a3b8' : inv.amountMatches ? '#15803d' : '#475569', textDecoration: voided ? 'line-through' : undefined }}>
         {money(inv.totalAmt, currency)}

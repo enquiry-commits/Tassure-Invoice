@@ -4,7 +4,7 @@ import { pageAll } from './page-all';
 import { todaySGT } from './date';
 import { fetchAllEstimates } from './quickbooks-estimates';
 import { traceQuotations, TRACE_GRACE_DAYS, type QuotationRow, type TraceInvoiceInput } from './quotation-trace';
-import { applyReviews, purgeCutoffIso, windowStart12Months, type QuotationRowView, type ReviewRecord } from './quotation-reviews';
+import { applyReviews, purgeCutoffIso, reviewKey, windowStart12Months, type LiveInvoiceState, type QuotationRowView, type ReviewRecord } from './quotation-reviews';
 import type { QbCompany } from './quickbooks';
 import { getApprovedAccount } from './approved-accounts';
 
@@ -160,5 +160,17 @@ export async function loadQuotationData(): Promise<QuotationData> {
     if (error) console.error('Quotation reviews clean-up failed:', error.message);
   }
 
-  return { ...live, rows: applyReviews(live.rows, (reviews.data ?? []) as ReviewRecord[]), reviewsReady };
+  const records = (reviews.data ?? []) as ReviewRecord[];
+
+  // The frozen invoices' paid state is read live (their membership and amounts stay frozen).
+  const liveState = new Map<string, LiveInvoiceState>();
+  const frozen = records.filter(r => r.completed_trace).flatMap(r => r.completed_trace!.invoices);
+  const ids = [...new Set(frozen.map(i => i.qbInvoiceId))];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await supabase.from('quickbooks_invoices').select('qb_company, qb_invoice_id, balance, status').in('qb_invoice_id', ids.slice(i, i + 200));
+    if (error) { console.error('Quotation paid-state refresh failed:', error.message); break; }
+    for (const inv of data ?? []) liveState.set(reviewKey(inv.qb_company, inv.qb_invoice_id), { balance: Number(inv.balance ?? 0), status: inv.status ?? 'Open' });
+  }
+
+  return { ...live, rows: applyReviews(live.rows, records, liveState), reviewsReady };
 }

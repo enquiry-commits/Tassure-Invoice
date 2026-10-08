@@ -1,6 +1,6 @@
 // Run: npx tsx test-quotation-reviews.ts
 // Quotation "Completed" + Remarks rules (lib/quotation-reviews.ts).
-import { applyReviews, canComplete, cleanRemarks, purgeCutoffIso, windowStart12Months, type ReviewRecord } from './lib/quotation-reviews';
+import { applyReviews, withLivePaidState, canComplete, cleanRemarks, purgeCutoffIso, windowStart12Months, type ReviewRecord } from './lib/quotation-reviews';
 import type { QuotationRow, QuotationTrace } from './lib/quotation-trace';
 
 let failed = 0;
@@ -20,7 +20,7 @@ const records: ReviewRecord[] = [
 ];
 const view = applyReviews(rows, records);
 
-check('a completed PI keeps its FROZEN trace — the invoice that matched later is not added', view[0].trace === frozenTrace && view[0].trace.invoices.length === 1);
+check('a completed PI keeps its FROZEN trace — the invoice that matched later is not added', view[0].trace.invoices.length === 1 && view[0].trace.tracedTotal === 1600 && !view[0].trace.invoices.some(i => i.invoiceNo === 'LIVE-2-NEW'));
 check('...and is flagged completed, with who and when', view[0].review.completed && view[0].review.completedBy === 'a@tassure.com' && view[0].review.completedAt === '2026-10-07T01:00:00Z');
 check('a PI with only a remark stays live and not completed', !view[1].review.completed && view[1].trace === liveTrace && view[1].review.remarks === 'waiting for client');
 check('a PI with no record is untouched', !view[2].review.completed && view[2].review.remarks === null && view[2].trace === liveTrace);
@@ -28,6 +28,11 @@ check('the key is book + estimate id: TAC #100 is not TAB #100', !view[3].review
 check('a completed record without a snapshot falls back to the live trace (never a blank)', applyReviews([row({})], [{ ...records[0], completed_trace: null }])[0].trace === liveTrace);
 check('applying reviews does not change the quotation itself (amount, status stay live)', view[0].docNumber === 'PI260092' && view[0].statusGroup === 'closed');
 
+const frozenWithInv = { ...frozenTrace, invoices: [{ source: 'TAB', qbInvoiceId: 'I1', invoiceNo: '1', status: 'Open', balance: 1600, totalAmt: 1600, amountMatches: true }] } as unknown as QuotationTrace;
+const paidNow = withLivePaidState(frozenWithInv, new Map([['TAB|I1', { balance: 0, status: 'Paid' }]]));
+check('a completed PI keeps its invoices frozen but shows their LIVE paid state', paidNow.invoices.length === 1 && paidNow.invoices[0].status === 'Paid' && paidNow.invoices[0].balance === 0 && paidNow.invoices[0].amountMatches === true && paidNow.invoices[0].totalAmt === 1600);
+check('an invoice with no live row keeps its frozen state', withLivePaidState(frozenWithInv, new Map()).invoices[0].status === 'Open');
+check('another book with the same invoice id is not touched', withLivePaidState(frozenWithInv, new Map([['TAC|I1', { balance: 0, status: 'Paid' }]])).invoices[0].status === 'Open');
 check('only a Closed quotation can be completed', canComplete({ statusGroup: 'closed' }) && !canComplete({ statusGroup: 'open' }) && !canComplete({ statusGroup: 'rejected' }));
 
 check('the list window is exactly 12 months back', windowStart12Months('2026-10-07') === '2025-10-07' && windowStart12Months('2026-01-31') === '2025-01-31');

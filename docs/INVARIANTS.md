@@ -5868,7 +5868,10 @@ again.
   deleted 365 days after `completed_at` (lazy purge on each load). The page
   lists only the last 12 months of PIs (`windowStart12Months`), so a purged PI
   cannot reappear: it is always completed after its own date, hence already
-  older than the window when purged. Key = (book, QB estimate id) — TAB #100
+  older than the window when purged. The frozen invoices' PAID state stays live (balance + status are
+  re-read from `quickbooks_invoices`; which invoices matched and their amounts
+  stay frozen) and the list shows "✓ PAID" beside a paid invoice (2026-10-08).
+  Key = (book, QB estimate id) — TAB #100
   is not TAC #100. Missing table → page still loads, buttons disabled, PATCH
   answers 503. Guarded by `test-quotation-reviews.ts`.
 

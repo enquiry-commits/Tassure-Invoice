@@ -64,7 +64,17 @@ export function cleanRemarks(raw: unknown): string | null {
  * Attach each quotation's review. A completed one keeps its FROZEN trace (never the live re-match); everything
  * else on the row stays live (status, amount, lines).
  */
-export function applyReviews(rows: readonly QuotationRow[], records: readonly ReviewRecord[]): QuotationRowView[] {
+export type LiveInvoiceState = { balance: number; status: string };
+
+/**
+ * A frozen trace keeps WHICH invoices matched and their amounts, but whether each is paid keeps moving after the PI
+ * is completed (Vincent, 2026-10-08: the paid tick must still work): overlay the invoice's live balance + status.
+ */
+export function withLivePaidState(trace: QuotationTrace, live: ReadonlyMap<string, LiveInvoiceState>): QuotationTrace {
+  return { ...trace, invoices: trace.invoices.map(inv => { const l = live.get(reviewKey(inv.source, inv.qbInvoiceId)); return l ? { ...inv, balance: l.balance, status: l.status } : inv; }) };
+}
+
+export function applyReviews(rows: readonly QuotationRow[], records: readonly ReviewRecord[], live: ReadonlyMap<string, LiveInvoiceState> = new Map()): QuotationRowView[] {
   const byKey = new Map(records.map(r => [reviewKey(r.qb_company, r.qb_estimate_id), r]));
   return rows.map(row => {
     const rec = byKey.get(reviewKey(row.source, row.qbEstimateId));
@@ -72,7 +82,7 @@ export function applyReviews(rows: readonly QuotationRow[], records: readonly Re
     const completed = !!rec.completed_at;
     return {
       ...row,
-      trace: completed && rec.completed_trace ? rec.completed_trace : row.trace,
+      trace: completed && rec.completed_trace ? withLivePaidState(rec.completed_trace, live) : row.trace,
       review: { remarks: rec.remarks, completed, completedAt: rec.completed_at, completedBy: rec.completed_by_email },
     };
   });
