@@ -600,3 +600,7 @@ body {
   .login-heading { margin-bottom: 28px; }
   .login-card-simple { padding: 34px 24px 30px; border-radius: 15px; }
 }
+
+/* Page titles are ALL CAPS (Vincent, 2026-10-08); the login heading keeps its own style */
+h1 { text-transform: uppercase; }
+.login-heading h1 { text-transform: none; }

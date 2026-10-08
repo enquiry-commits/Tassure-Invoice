@@ -533,7 +533,7 @@ export default function DashboardPage() {
               <div className="dashboard-hero-grid" style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 700, color: '#c8ded5', textTransform: 'uppercase', letterSpacing: '.9px', marginBottom: 12 }}><Sparkles size={12} /> Portfolio command centre</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-.035em', lineHeight: 1.18, maxWidth: 600 }}>Your operational picture,<br />beautifully focused.</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-.035em', lineHeight: 1.18, maxWidth: 600 }}>Your operational picture,<br />beautifully focused.</div>
                   <div style={{ fontSize: 12, color: '#c6d8e8', marginTop: 10, maxWidth: 570, lineHeight: 1.6 }}>Prioritise upcoming annual returns, resolve filing risks and understand service coverage before billing begins.</div>
                 </div>
                 <div className="dashboard-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 28, paddingTop: 22, borderTop: '1px solid rgba(255,255,255,.15)' }}>
