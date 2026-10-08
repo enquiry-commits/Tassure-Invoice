@@ -18,7 +18,7 @@ check('both SOA row builders fill picShown with it (blank on a TAC ND row, INV-P
 check('the owner list is unchanged (still TeamWork + Classes, for the dropdown and the default owner)', (data.match(/picOptions: \[\.\.\.new Set\(\[\.\.\.picFromCompanies, \.\.\.picFromInvoices\]\)\],/g) ?? []).length === 2);
 
 const page = read('app/billing/soa/_components.tsx');
-check('the PIC column shows picShown (book rows and the combined ALL row)', /c\.picShown\.length \? c\.picShown\.map/.test(page) && /combined\.picShown\.length \? combined\.picShown\.map/.test(page) && !/c\.picOptions\.length \? c\.picOptions\.map/.test(page));
+check('the PIC column shows picShown (book rows and the combined ALL row)', /names=\{c\.picShown\} override=\{c\.picOverride/.test(page) && /combined\.picShown\.length \? combined\.picShown\.map/.test(page) && !/c\.picOptions\.length \? c\.picOptions\.map/.test(page));
 check('the PIC filter offers and matches the people the column shows (everyone responsible, INV-PIC-011)', /for \(const p of c\.picShown\) names\.add\(p\);/.test(page) && /\(people\.length \? people : c\.picShown\)\.some\(p => selectedSet\.has\(p\)\)/.test(page));
 check('the ALL row merges picShown from its books', /picShown: \[\.\.\.new Set\(group\.rows\.flatMap\(row => row\.picShown\)\)\]/.test(page) && /picShown: \[\.\.\.new Set\(rows\.flatMap\(row => row\.picShown\)\)\]/.test(page));
 

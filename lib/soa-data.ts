@@ -55,6 +55,9 @@ export interface SoaCompanyRow {
   // INV-PIC-011 — there is no Main PIC any more). See picShownFor. Empty on a TAC
   // Nominee Director row (ndFollowsTab — "ND服务 我们都不会放PIC是谁的").
   picShown: string[];
+  // The person picked by hand in the PIC dropdown (soa_pic_overrides, INV-PIC-012) — when set, picShown is just this
+  // person and it beats everything the system works out. null = the system's own answer.
+  picOverride: string | null;
   // TAC only (INV-PIC-010): every unpaid TAC invoice line is a Nominee
   // Director service, so the people responsible are the same company's TAB
   // people (tabPeople) — see lib/soa-main-pic.ts and attachTabMainPic below.
@@ -315,6 +318,23 @@ async function loadNdOnlyInvoiceIds(invoiceIds: string[]): Promise<Set<string>> 
   return new Set([...ndByInvoice].filter(([, nd]) => nd).map(([id]) => id));
 }
 
+// The manual PIC picks for one book (soa_pic_overrides, INV-PIC-012): the person Chelsea chose from the PIC dropdown
+// beats QuickBooks' Classes and the TeamWork PIC, and nothing in the system rewrites it. Keyed by the normalized
+// customer name, looked up by the QuickBooks name and by the name shown (the same two keys the old picks used). A
+// missing table (SQL not run yet) simply means no overrides.
+async function applyPicOverrides(rows: SoaCompanyRow[], qbKeyByRow: Map<SoaCompanyRow, string>, company: QbCompany): Promise<void> {
+  const { data, error } = await createAdminClient().from('soa_pic_overrides').select('customer_name_norm, pic').eq('qb_company', company);
+  if (error || !data?.length) return;
+  const byKey = new Map(data.map(o => [o.customer_name_norm as string, o.pic as string]));
+  for (const row of rows) {
+    const pic = byKey.get(qbKeyByRow.get(row) ?? '') ?? byKey.get(normalize(row.companyName));
+    if (!pic) continue;
+    row.picOverride = pic;
+    row.picShown = [pic];
+    if (!row.picOptions.includes(pic)) row.picOptions = [...row.picOptions, pic];
+  }
+}
+
 // Each TAC ND row's tabPeople: the people responsible for the same company's
 // TAB SOA row (matched the way the SOA page's ALL view groups a company —
 // normalized company name). No TAB row (nothing owed on TAB): what TAB's
@@ -489,6 +509,7 @@ export async function computeSoaRows(company: QbCompany, opts?: SoaRowsOptions):
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
       ndFollowsTab,
+      picOverride: null,
       tabPeople: [],
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
@@ -503,6 +524,7 @@ export async function computeSoaRows(company: QbCompany, opts?: SoaRowsOptions):
     qbKeyByRow.set(row, key);
     return row;
   });
+  await applyPicOverrides(rows, qbKeyByRow, company);
   if (company === 'TAC') await attachTabMainPic(rows, qbKeyByRow, opts);
   return rows.sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }
@@ -647,6 +669,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: SoaRowsOptions): 
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
       ndFollowsTab,
+      picOverride: null,
       tabPeople: [],
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
@@ -664,6 +687,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: SoaRowsOptions): 
     qbKeyByRow.set(row, key);
     return row;
   });
+  await applyPicOverrides(rows, qbKeyByRow, company);
   if (company === 'TAC') await attachTabMainPic(rows, qbKeyByRow, opts);
   return rows.sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }

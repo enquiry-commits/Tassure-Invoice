@@ -5895,3 +5895,20 @@ again.
   components/ and fails on any other value — add a size only by changing the
   scale there and here. Not covered: PDFs/emails (INV-DOC-011), string sizes
   such as '0.55em'.
+
+- **INV-PIC-012** — Manual PIC pick on the SOA PIC column (Vincent/Chelsea,
+  2026-10-08, after Inventa Projects/Technologies showed Chin Kah Ye only
+  because their balance is an opening-balance Journal Entry "OPNG JE" with no
+  Class). The PIC cell is a dropdown: default = QuickBooks' own PIC
+  (INV-PIC-008); a person picks ONE staff member and that pick has the HIGHEST
+  priority after Bad Debt — `responsiblePeople()` returns just that person, it
+  beats a TAC ND row following TAB and the Location suggestion, and nothing in
+  the system (sync, Class changes) overwrites it. Stored per company PER BOOK
+  in the NEW table `soa_pic_overrides` (scripts/add-soa-pic-overrides.sql);
+  "Back to QuickBooks PIC" deletes the row. Anyone who can open Outstanding may
+  change it (updated_by_email recorded). The old `soa_owners` picks (Sept
+  import, the 5 manual ones) stay ignored (INV-PIC-011) — that is why this is
+  a separate table. Applied in both row builders BEFORE the TAC→TAB attach so
+  a TAB override flows to TAC ND rows. On the combined ALL parent row the
+  names are read-only; edit on the book rows. Missing table = no overrides.
+  Guarded by `test-soa-main-pic.ts`, `test-soa-pic-column.ts`.

@@ -7,6 +7,8 @@
 // everyone the PIC column lists is responsible, and picking any ONE of them shows the company.
 //
 // Who is responsible, in order:
+//   0. a MANUAL pick for this row (soa_pic_overrides, 2026-10-08 — Chelsea fixes a wrong/empty PIC from the dropdown):
+//      one person, highest priority after Bad Debt, never overwritten by the system (INV-PIC-012).
 //   1. "BD" (Bad Debt) — a stored STATUS, not a person, kept even when the Sept import wrote it ("BD 保留"). It
 //      is the only stored value still read; any other soa_owners pick is ignored (Vincent chose that).
 //   2. a TAC row whose unpaid invoices are ALL Nominee Director services (INV-PIC-010) has no PIC of its own:
@@ -24,6 +26,8 @@ export type MainPicRow = {
   picOptions: string[];
   ndFollowsTab: boolean;
   tabPeople: string[];
+  // The manual pick (soa_pic_overrides) — null/absent = use the system's own answer.
+  picOverride?: string | null;
 };
 
 // Stored values that are a status, not a person.
@@ -46,8 +50,9 @@ export function isBadDebt(row: Pick<MainPicRow, 'soaPic'>): boolean {
 }
 
 /** Everyone responsible for this row (see the order above); 'BD' means Bad Debt, not a person. */
-export function responsiblePeople(row: Pick<MainPicRow, 'soaPic' | 'suggestedOwner' | 'picShown' | 'ndFollowsTab' | 'tabPeople'>): string[] {
+export function responsiblePeople(row: Pick<MainPicRow, 'soaPic' | 'suggestedOwner' | 'picShown' | 'ndFollowsTab' | 'tabPeople' | 'picOverride'>): string[] {
   if (isBadDebt(row)) return ['BD'];
+  if (row.picOverride) return [row.picOverride];
   if (row.ndFollowsTab) return [...row.tabPeople];
   if (row.picShown.length) return [...new Set(row.picShown)];
   return row.suggestedOwner ? [row.suggestedOwner] : [];

@@ -600,3 +600,8 @@ Run `npx tsx test-soa-group-email.ts` (`ALL OK`). Then on the DEPLOYED site, sig
 **Trigger:** any change that adds `fontSize`/`font-size`/`fontWeight` in app/ or components/.
 **Run:** `npx tsx test-typography-scale.ts` (`ALL OK`). On the DEPLOYED site, look at the densest screens (Billing list + expanded row, SOA, Master List, Assistant chat, Quotation): no column wraps or overflows that did not before; small badges (9px) still readable.
 **Guards:** `docs/INVARIANTS.md` INV-UI-002.
+
+## REG-053 — SOA manual PIC dropdown
+**Trigger:** any change to `lib/soa-main-pic.ts`, `applyPicOverrides` in `lib/soa-data.ts`, the PIC cell or `PATCH /api/billing/soa` (picOverride).
+**Run:** `npx tsx test-soa-main-pic.ts`, `test-soa-pic-column.ts`, `test-soa-person-book.ts` (`ALL OK`). After `scripts/add-soa-pic-overrides.sql` is run, on the DEPLOYED site: (1) Outstanding › TAB: Inventa Projects' PIC cell is a dropdown showing Chin Kah Ye; (2) pick another person: the cell shows them in navy bold, reload keeps it, the people filter and My Tasks follow the new person; (3) "Back to QuickBooks PIC" restores Chin Kah Ye; (4) the same company in TAO/TAC is unaffected.
+**Guards:** `docs/INVARIANTS.md` INV-PIC-012.

@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-08 (NEW: the SOA PIC column is a dropdown — a manual pick beats QuickBooks' PIC and is never overwritten; Vincent: "手动改的优先级最高，不会被系统化修改").
+
+**What changed (INV-PIC-012, REG-053).** Chelsea can pick ONE person per company per book from the PIC cell; "Back to QuickBooks PIC" undoes it. New table `soa_pic_overrides` — **Vincent must run `scripts/add-soa-pic-overrides.sql` in Supabase**; until then the dropdown shows but saving answers "run the SQL" and nothing changes. Decided by Vincent: one person only; per book; anyone who can open Outstanding. Old soa_owners picks stay ignored.
+
+**Verification.** `tsc` 0; PIC tests ALL OK; live read-only: TAB rows (263) still load with no table and Inventa still shows Chin Kah Ye. **Not verified:** the dropdown and the save in a browser/against the real table.
+
 Last updated: 2026-10-07 (NEW: typography step 2 — font sizes 35 → 11 values; Vincent: "35种太夸张了").
 
 **What changed (INV-UI-002, REG-052).** All font sizes in app/ and components/ moved onto 9/10/11/12/13/14/16/18/20/24/28 (half sizes rounded down, big ones mapped), 49 files, 1,500+ values by script; leftover ternaries and embedded CSS fixed by hand; `test-typography-scale.ts` guards it (also weights 400–700).

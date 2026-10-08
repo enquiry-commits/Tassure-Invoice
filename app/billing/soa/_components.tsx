@@ -82,6 +82,8 @@ function mergeSameSourceRows(rows: Row[]): Row {
     // Bad Debt is the only stored mark still read (INV-PIC-011).
     soaPic: rows.some(isBadDebt) ? 'BD' : null,
     soaPicSource: rows.some(isBadDebt) ? 'person' : null,
+    // one manual PIC only when every merged book carries the same one
+    picOverride: rows.every(row => row.picOverride) && new Set(rows.map(row => row.picOverride)).size === 1 ? rows[0].picOverride : null,
     classOwner: classOwners.length === 1 ? classOwners[0] : null,
     suggestedOwner: suggestedOwners.length === 1 ? suggestedOwners[0] : null,
     invoiceCount: rows.reduce((sum, row) => sum + row.invoiceCount, 0),
@@ -140,6 +142,23 @@ const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value)
 // is no Main PIC any more). `badDebtLabel` is null when not marked, else the text of the red tag ("Bad Debt", or
 // "Bad Debt (TAB)" when only some sources of the company are). The dropdown is a native <select> laid invisibly over
 // the arrow, so its list opens reliably outside the scrolling table.
+// The PIC cell (INV-PIC-012): shows QuickBooks' own PIC and lets a person pick ONE staff member by hand. The manual
+// pick wins over everything the system works out and is never overwritten; "Back to QuickBooks PIC" removes it.
+const PIC_AUTO = '__auto__';
+function SoaPicSelect({ names, override, onChange }: { names: string[]; override: string | null; onChange: (value: string) => void }) {
+  const autoLabel = names.length ? names.join(', ') : '—';
+  return (
+    <select value={override ?? PIC_AUTO} aria-label="PIC" title={override ? 'Set by hand — click to change or go back to QuickBooks' : 'QuickBooks PIC — click to set someone by hand'}
+      onChange={event => onChange(event.target.value === PIC_AUTO ? '' : event.target.value)}
+      style={{ width: '100%', maxWidth: 150, border: '1px solid transparent', borderRadius: 6, background: 'transparent', color: override ? '#1d3a5c' : '#64748b', fontWeight: override ? 700 : 400, fontSize: 11, textAlign: 'center', textAlignLast: 'center', cursor: 'pointer', padding: '3px 2px', outline: 'none' }}
+      onFocus={event => { event.currentTarget.style.borderColor = '#cbd5e1'; event.currentTarget.style.background = '#fff'; }}
+      onBlur={event => { event.currentTarget.style.borderColor = 'transparent'; event.currentTarget.style.background = 'transparent'; }}>
+      <option value={PIC_AUTO}>{override ? 'Back to QuickBooks PIC' : autoLabel}</option>
+      {allStaffNames().map(name => <option key={name} value={name}>{name}</option>)}
+    </select>
+  );
+}
+
 function SoaRemarksInput({ value, onSave, badDebtLabel, onBadDebtChange }: {
   value: string | null; onSave: (value: string) => Promise<void>;
   badDebtLabel?: string | null; onBadDebtChange?: (bad: boolean) => void;
@@ -996,6 +1015,25 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     }).catch(() => {});
   };
 
+  // The PIC dropdown (INV-PIC-012): a manual pick for THIS row's book; '' puts QuickBooks' own PIC back. Optimistic,
+  // rolled back with a notice if the save fails.
+  const updatePicOverride = (row: Row, value: string) => {
+    const company = rowCompany(row);
+    const apply = (pic: string | null, prev?: Row) => setCompanies(current => (current ?? []).map(c =>
+      (c.companyName === row.companyName && rowCompany(c) === company)
+        ? (prev ? { ...prev, qbCompany: c.qbCompany } as typeof c : { ...c, picOverride: pic, picShown: pic ? [pic] : c.picShown, picOptions: pic && !c.picOptions.includes(pic) ? [...c.picOptions, pic] : c.picOptions })
+        : c));
+    apply(value || null);
+    fetch('/api/billing/soa', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyName: row.companyName, picOverride: value || null, company }),
+    }).then(async res => {
+      if (res.ok) { if (!value) load({ silent: true }); return; } // clearing: reload so QuickBooks' own PIC shows again
+      const json = await res.json().catch(() => ({}));
+      apply(null, row); window.alert(json.error ?? 'Could not save the PIC');
+    }).catch(() => { apply(null, row); window.alert('Could not save the PIC'); });
+  };
+
   const updateSoaRemarks = async (companyName: string, value: string) => {
     const response = await fetch('/api/billing/soa', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -1114,7 +1152,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontVariantNumeric: 'tabular-nums', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
           {/* QuickBooks' own PIC (invoice Classes), else TeamWork's — INV-PIC-008 */}
-          {c.picShown.length ? c.picShown.map(name => <div key={name}>{name}</div>) : '—'}
+          <div onClick={event => event.stopPropagation()}>
+            <SoaPicSelect names={c.picShown} override={c.picOverride ?? null} onChange={value => updatePicOverride(c, value)} />
+          </div>
         </div>
         {opts.child ? (
           <div style={{ padding: '0 6px' }} />

@@ -6,6 +6,7 @@ import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-account
 import type { QbCompany } from '@/lib/quickbooks';
 import { computeSoaRows, type SoaCompanyRow as BaseSoaCompanyRow } from '@/lib/soa-data';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from '@/lib/soa-reminder-progress';
+import { allStaffNames } from '@/lib/staff-directory';
 import { isMissingSoaRemarksStorage, loadSoaRemarks, soaRemarksForCompany } from '@/lib/soa-remarks';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
@@ -72,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
   const body = await req.json().catch(() => ({})) as {
-    companyName?: string; soaPic?: string | null; company?: QbCompany; remarks?: string | null;
+    companyName?: string; soaPic?: string | null; company?: QbCompany; remarks?: string | null; picOverride?: string | null;
   };
   const { companyName, soaPic, company } = body;
   const name = companyName?.trim();
@@ -98,6 +99,25 @@ export async function PATCH(req: NextRequest) {
 
   if (!company || !QB_COMPANIES.includes(company)) {
     return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
+  }
+
+  // The manual PIC pick (INV-PIC-012): ONE person from the staff directory, for this company in THIS book; an empty
+  // value deletes it, which puts QuickBooks' own PIC back. Its own table — the old soa_owners picks stay ignored.
+  if (Object.prototype.hasOwnProperty.call(body, 'picOverride')) {
+    const pic = body.picOverride?.trim() || null;
+    if (pic && !allStaffNames().includes(pic)) return NextResponse.json({ error: 'Pick a person from the staff list' }, { status: 400 });
+    const query = pic
+      ? supabase.from('soa_pic_overrides').upsert({
+          customer_name_norm: normalize(name), customer_name: name, qb_company: company, pic,
+          updated_at: new Date().toISOString(), updated_by_email: account.email,
+        }, { onConflict: 'customer_name_norm,qb_company' })
+      : supabase.from('soa_pic_overrides').delete().eq('customer_name_norm', normalize(name)).eq('qb_company', company);
+    const { error } = await query;
+    if (error) {
+      const missing = /soa_pic_overrides/.test(error.message) && /(does not exist|schema cache)/i.test(error.message);
+      return NextResponse.json({ error: missing ? 'Manual PIC storage is not installed yet. Run scripts/add-soa-pic-overrides.sql in Supabase.' : error.message }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
   }
 
   const { error } = await supabase.from('soa_owners').upsert({
