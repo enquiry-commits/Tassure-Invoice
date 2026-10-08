@@ -582,6 +582,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [companies, setCompanies] = useState<Row[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // the Current / 61+ Days Overdue cards: show only clients with money in that aging bucket (never together with Overpaid)
+  const [agingOnly, setAgingOnly] = useState<null | 'current' | 'overdue61'>(null);
   const [overpaidOnly, setOverpaidOnly] = useState(false); // the Overpaid card: show only clients we owe money
   // Vincent, 2026-10-04, on the single-select "My book" picker: "这个默认是
   // All, 但是我要变成可以多选的, 方便Leader查看部门的人员欠款多少, 所以这边
@@ -727,7 +729,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // companies — PICs selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
   useEffect(() => {
-    setSearch(''); setOverpaidOnly(false); setPicFilters([]); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
+    setSearch(''); setOverpaidOnly(false); setAgingOnly(null); setPicFilters([]); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
   }, [qbCompany]);
 
   // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
@@ -912,8 +914,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         list = list.filter(c => isOverpaid(net.get(allCompanyGroupKey(c.companyName)) ?? 0));
       } else list = list.filter(c => isOverpaid(c.totalOutstanding));
     }
+    if (agingOnly) {
+      const has = (c: Row) => (agingOnly === 'current' ? c.aging.current > 0 : c.aging.d61_90 > 0 || c.aging.d91_plus > 0);
+      if (qbCompany === 'ALL') {
+        // in All a client is one card across its books — it counts when ANY of its books has money in that bucket
+        const keep = new Set(list.filter(has).map(c => allCompanyGroupKey(c.companyName)));
+        list = list.filter(c => keep.has(allCompanyGroupKey(c.companyName)));
+      } else list = list.filter(has);
+    }
     return list;
-  }, [picScoped, search, overpaidOnly, qbCompany]);
+  }, [picScoped, search, overpaidOnly, agingOnly, qbCompany]);
 
   const allGroups: AllCompanyGroup[] = (() => {
     if (qbCompany !== 'ALL') return [];
@@ -1196,16 +1206,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10, marginBottom: 16 }}>
           <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
-            icon={<Receipt size={16} />} color="#1d3a5c" active={!overpaidOnly} onClick={() => setOverpaidOnly(false)} ariaLabel="Show all clients with a balance" />
+            icon={<Receipt size={16} />} color="#1d3a5c" active={!overpaidOnly && !agingOnly} onClick={() => { setOverpaidOnly(false); setAgingOnly(null); }} ariaLabel="Show all clients with a balance" />
           <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub="owed minus overpaid (net)"
             icon={<Receipt size={16} />} color="#0f766e" />
-          <MetricCard value={<MoneyValue amount={counts.current} />} label="Current" sub="not yet due (the Current column)"
-            icon={<Receipt size={16} />} color="#1d3a5c" />
+          <MetricCard value={<MoneyValue amount={counts.current} />} label="Current" sub={agingOnly === 'current' ? 'showing only these · click to show all' : 'not yet due · click to list them'}
+            icon={<Receipt size={16} />} color="#1d3a5c" active={agingOnly === 'current'} onClick={() => { setOverpaidOnly(false); setAgingOnly(v => (v === 'current' ? null : 'current')); }} ariaLabel="Show only clients with a Current balance" />
           <MetricCard value={<span style={{ color: counts.overpaidCount ? 'var(--status-danger)' : undefined }}><MoneyValue amount={-counts.overpaidAmount} /></span>}
             label="Overpaid — we owe clients" sub={overpaidOnly ? 'showing only these · click to show all' : `${counts.overpaidCount} client${counts.overpaidCount === 1 ? '' : 's'} · click to list them`}
-            icon={<AlertTriangle size={16} />} color="var(--status-danger)" active={overpaidOnly} onClick={() => setOverpaidOnly(v => !v)} ariaLabel="Show only clients who overpaid" />
-          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilters.length ? `${picFilterLabel}'s book` : 'needs a statement sent soon'}
-            icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
+            icon={<AlertTriangle size={16} />} color="var(--status-danger)" active={overpaidOnly} onClick={() => { setAgingOnly(null); setOverpaidOnly(v => !v); }} ariaLabel="Show only clients who overpaid" />
+          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={agingOnly === 'overdue61' ? 'showing only these · click to show all' : picFilters.length ? `${picFilterLabel}'s book · click to list` : 'needs a statement sent soon · click to list'}
+            icon={<AlertTriangle size={16} />} color="var(--status-danger)" active={agingOnly === 'overdue61'} onClick={() => { setOverpaidOnly(false); setAgingOnly(v => (v === 'overdue61' ? null : 'overdue61')); }} ariaLabel="Show only clients 61+ days overdue" />
         </div>
       )}
 
