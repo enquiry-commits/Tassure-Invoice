@@ -1454,7 +1454,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       })}
                       <div style={{ textAlign: 'center', fontSize: 12, fontVariantNumeric: 'tabular-nums', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                        {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
+                        {group.rows.length === 1 ? (
+                          // a company with ONE source: this row IS that book's row, so the PIC can be picked right here
+                          <div onClick={event => event.stopPropagation()}>
+                            <SoaPicSelect names={group.rows[0].picShown} override={group.rows[0].picOverride ?? null} onChange={value => updatePicOverride(group.rows[0], value)} />
+                          </div>
+                        ) : (combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—')}
                       </div>
                       <div style={{ padding: '0 6px' }} onClick={event => event.stopPropagation()}>
                         {(() => {
