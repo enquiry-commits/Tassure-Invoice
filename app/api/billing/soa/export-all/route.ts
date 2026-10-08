@@ -45,7 +45,7 @@ export async function GET() {
       return {
         remarks: soaRemarksForCompany(remarks, row.companyName),
         // A client that paid more than it was billed gets no collection reminder.
-        reminder: row.totalOutstanding < 0 ? 'We owe client (overpaid)' : progress.completedLabel ? `${progress.completedLabel}${sent ? ` — ${sent}` : ''}` : 'Not sent',
+        reminder: row.totalOutstanding < 0 ? 'We owe client (overpaid)' : progress.completedLabel ? `${progress.completedLabel}${sent ? ` — ${sent}` : ''}` : '',
       };
     };
   } catch (err) {
