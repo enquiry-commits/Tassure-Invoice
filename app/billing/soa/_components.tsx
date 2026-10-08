@@ -148,17 +148,20 @@ const PIC_AUTO = '__auto__';
 function SoaPicSelect({ names, override, onChange }: { names: string[]; override: string | null; onChange: (value: string) => void }) {
   const autoLabel = names.length ? names.join(', ') : '—';
   return (
-    <select value={override ?? PIC_AUTO} aria-label="PIC" title={override ? 'Set by hand — click to change or go back to QuickBooks' : 'QuickBooks PIC — click to set someone by hand'}
-      onChange={event => onChange(event.target.value === PIC_AUTO ? '' : event.target.value)}
+    <select value={override ?? ''} aria-label="PIC" title={override ? 'Set by hand — click to change or go back to QuickBooks' : 'QuickBooks PIC — click to set someone by hand'}
+      onChange={event => onChange(event.target.value === PIC_AUTO || !event.target.value ? '' : event.target.value)}
       style={{ width: '100%', maxWidth: 150, border: '1px solid transparent', borderRadius: 6, background: 'transparent', color: override ? '#1d3a5c' : '#64748b', fontWeight: override ? 700 : 400, fontSize: 11, textAlign: 'center', textAlignLast: 'center', cursor: 'pointer', padding: '3px 2px', outline: 'none' }}
       onFocus={event => { event.currentTarget.style.borderColor = '#cbd5e1'; event.currentTarget.style.background = '#fff'; }}
       onBlur={event => { event.currentTarget.style.borderColor = 'transparent'; event.currentTarget.style.background = 'transparent'; }}>
-      <option value={PIC_AUTO}>{override ? 'Back to QuickBooks PIC' : autoLabel}</option>
+      {/* no pick yet: a hidden placeholder shows QuickBooks' own names in the closed box; the first real entry is always "Back to QuickBooks PIC" */}
+      {!override && <option value="" hidden>{autoLabel}</option>}
+      <option value={PIC_AUTO}>Back to QuickBooks PIC</option>
       {(() => {
         const teams = staffByTeam();
         const inTeam = new Set(teams.flatMap(t => t.members.map(m => m.name)));
         const others = allStaffNames().filter(name => !inTeam.has(name));
-        return [...teams.map(t => ({ label: t.team, names: t.members.map(m => m.name) })), ...(others.length ? [{ label: 'Others', names: others }] : [])]
+        // the Audit team does not chase collections, so it is not offered
+        return [...teams.filter(t => t.team !== 'Audit').map(t => ({ label: t.team, names: t.members.map(m => m.name) })), ...(others.length ? [{ label: 'Others', names: others }] : [])]
           .map(g => <optgroup key={g.label} label={g.label}>{g.names.map(name => <option key={name} value={name}>{name}</option>)}</optgroup>);
       })()}
     </select>
