@@ -42,7 +42,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Bot, MessageCircle, Send, Sparkles, X, Minus, Paperclip } from 'lucide-react';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard, InvoicePdfCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, type ChatMsg, type ChatAttachment,
 } from '@/components/assistant/ChatCards';
@@ -374,6 +374,7 @@ export default function AssistantWidget() {
         emailDraftPreview: json.emailDraftPreview ?? undefined,
         companyUpdatePreview: json.companyUpdatePreview ?? undefined,
         taoPreview: json.taoPreview ?? undefined,
+        invoicePdfPreview: json.invoicePdfPreview ?? undefined,
         invoiceEditPreview: json.invoiceEditPreview ?? undefined,
         postIncorporatePreview: json.postIncorporatePreview ?? undefined,
       }]);
@@ -531,6 +532,9 @@ export default function AssistantWidget() {
                         )}
                         {message.taoPreview && (
                           <TaoBillingCard preview={message.taoPreview} conversationId={conversationId} />
+                        )}
+                        {message.invoicePdfPreview && (
+                          <InvoicePdfCard preview={message.invoicePdfPreview} conversationId={conversationId} />
                         )}
                         {message.companyUpdatePreview && (
                           <CompanyUpdateCard preview={message.companyUpdatePreview} conversationId={conversationId} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />

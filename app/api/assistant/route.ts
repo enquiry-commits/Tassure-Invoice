@@ -30,6 +30,8 @@ import type { SoaPreview } from '@/lib/outstanding-lookup';
 import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '@/lib/email-draft-lookup';
 import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateField } from '@/lib/company-update-lookup';
 import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
+import { findInvoicesForPdf } from '@/lib/invoice-pdf-lookup';
+import type { InvoicePdfPreview } from '@/lib/invoice-pdf-card';
 import { getTeamActivity } from '@/lib/team-activity';
 import { getTeamRoster } from '@/lib/team-roster';
 import { teamForEmail, type StaffTeam } from '@/lib/staff-directory';
@@ -1627,7 +1629,7 @@ HANDING OVER A FULL LIST: after list_companies, collections_worklist, upcoming_d
 TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Several tools look similar; these are the distinctions that actually matter:
 - About ONE named company → company_deep_lookup (the full picture). search_company is only for disambiguating a name or the few basics it lists; never conclude "I don't have that" from search_company alone.
 - WHICH companies match something → list_companies. HOW MANY / what's the mix → customer_profile_summary.
-- Money owed by one company → check_outstanding_balance. Owed across a whole QuickBooks book → outstanding_balance_summary.
+- A client's INVOICE document (see / download / 查看 / 下载 an invoice, by number or company) → find_invoice_pdf (the card offers 原装 Original vs 最新 Latest for split invoices). Money owed by one company → check_outstanding_balance. Owed across a whole QuickBooks book → outstanding_balance_summary.
 - What's due soon / overdue across everyone → upcoming_deadlines. Who to chase for late filing specifically → late_filing_summary (authoritative, applies extra rules).
 - "今天大家/团队做了什么" / "其他人在干嘛" / "具体改了什么" (what did the team do, at any level of detail) → team_activity. It now returns FIELD-LEVEL detail — which company, which field, from what value to what value — for AR Reminder, Master List and Trademark edits, plus invoices/emails/campaigns/Post Incorporate as creations. It excludes the person asking, on purpose. Do NOT answer with active_users_today (page VISITS, not work) and do NOT stop at recent_changes (audit_log only — it misses every human AR edit, which lives in ar_reminder_audit; team_activity reads both). If team_activity is quiet, say so plainly. "今天秘书部/会计部/税务部做了什么" (department-scoped) → team_activity with its department parameter set directly, in the SAME call — do NOT call team_roster first to look up members and filter yourself; that extra round trip has caused real timeouts.
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
@@ -1688,6 +1690,7 @@ const ASSISTANT_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
 
 const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'NARROW quick lookup by (partial) name — returns ONLY: status, FYE month, 3 service flags, PIC, active nominee directors, and the last 2 AR reminder rows, for up to 5 name matches. Use it ONLY to disambiguate a name or answer exactly those basics. For ANYTHING else about a specific company — directors/secretary/shareholders, trademarks, invoice or document history, contact email, whether they are still a client, how far their annual return has got — use company_deep_lookup instead, which has all of it; do NOT answer "I don\'t have that" off this tool\'s thin result. To find WHICH companies match a filter (a PIC\'s portfolio, a service, an FYE month), use list_companies. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'find_invoice_pdf', description: "Find a client's invoice(s) in QuickBooks so the user can DOWNLOAD the PDF. Use when someone asks to see / get / download / send / 查看 / 下载 an invoice (发票) — by invoice number (e.g. 02611132) or by company name. Searches the synced TAB / TAC / TAO invoices, newest first. A real interactive CARD renders under your reply with the download buttons: for an invoice accounting has SPLIT it offers two — 原装 Original (what the client first received) and 最新 Latest (QuickBooks' current, split version); for an unsplit invoice just one Download. YOU do not choose or fetch the PDF — never say you attached it or paste a link; tell the user briefly what you found (how many invoices, which companies) and ask them to pick the version on the card. If a split invoice's original is not in QuickBooks the card says so. Read-only.", input_schema: { type: 'object', properties: { query: { type: 'string', description: 'An invoice number (digits, with or without TAB/TAC/TAO) or part of the company name (min 3 characters)' } }, required: ['query'] } },
   { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding), or wants to generate/download/send an SOA (Statement of Account) for it — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, who owns chasing it, and a real soa_link to that company's own SOA book — the real page to download the SOA PDF and draft the client email, NOT Billing Drafts). When the company owes across MORE THAN ONE QuickBooks book, ALSO returns soa_link_all — a real ONE-PDF-covering-every-book combined Statement (/billing/soa/all); offer this when the user wants everything together, never claim no combined option exists.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'outstanding_balance_summary', description: "REAL, live QuickBooks outstanding-balance total ACROSS ALL CUSTOMERS for one or more QuickBooks companies (TAB/TAC/TAO) — the exact same computation the real /billing/soa pages use, summed. Use this for a company-WIDE question like \"TAB 的欠款总数是多少\"/\"how much is outstanding on TAC overall\" — NOT for a question about one specific company (use check_outstanding_balance for that). Returns, per requested QB company, the real total, how many customers have a balance, and the top 5 largest debtors with their own totals and oldest aging bucket.", input_schema: { type: 'object', properties: { qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks companies to summarize — omit to summarize all 3' } } } },
   { name: 'active_users_today', description: 'REAL, live list of which staff have actually been LOGGED IN AND CLICKING recently (recorded page-view events, tracking since 2026-09-08). Any account may call it; people above that caller in rank are omitted. These are VISIT COUNTS, not work done: a person with 18 visits has not necessarily completed anything. For what was actually done/changed, use recent_changes (company-wide) or recent_activity_summary (one person). Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
@@ -1841,6 +1844,19 @@ const CLAUDE_TOOLS = [
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
   if (name === 'search_company') return searchCompany(String(input.query ?? ''));
   if (name === 'check_outstanding_balance') return checkOutstandingBalance(String(input.company ?? ''));
+  if (name === 'find_invoice_pdf') {
+    const result = await findInvoicesForPdf(String(input.query ?? ''));
+    if (!result.found) return { found: false as const, message: result.message };
+    // _invoicePdf is stripped before the model sees it (the _export convention): the card, not the model, carries the PDFs.
+    return {
+      found: true as const,
+      count: result.preview.invoices.length,
+      invoices: result.preview.invoices.map(i => ({ invoiceNo: i.invoiceNo, book: i.book, date: i.txnDate, customer: i.customerName, total: i.totalAmt, status: i.status, split: i.split })),
+      truncated: result.preview.truncated,
+      _invoicePdf: result.preview,
+      note: 'A real card with the download buttons now renders under your reply (Original / Latest only for split invoices). Say briefly what was found and ask them to pick on the card — do not claim to have sent or attached a file.',
+    };
+  }
   if (name === 'outstanding_balance_summary') {
     const requested = Array.isArray(input.qbCompanies) ? input.qbCompanies.filter((c): c is QbCompany => c === 'TAB' || c === 'TAC' || c === 'TAO') : [];
     return outstandingBalanceSummary(requested.length ? requested : ['TAB', 'TAC', 'TAO']);
@@ -1898,6 +1914,7 @@ type ClaudeAnswerResult = {
   emailDraftPreview?: EmailDraftPreview;
   companyUpdatePreview?: CompanyUpdatePreview;
   taoPreview?: TaoPreview;
+  invoicePdfPreview?: InvoicePdfPreview;
   toolNames: string[];
   toolEvidence: ToolEvidence[];
   // Which learned guidance rules were in this answer's prompt (INV-AI-012) —
@@ -1946,6 +1963,7 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
   let lastEmailDraftPreview: EmailDraftPreview | undefined;
   let lastCompanyUpdatePreview: CompanyUpdatePreview | undefined;
   let lastTaoPreview: TaoPreview | undefined;
+  let lastInvoicePdfPreview: InvoicePdfPreview | undefined;
   const toolNames: string[] = [];
   const toolEvidence: ToolEvidence[] = [];
   // The reply-scanning safety-net guards (INV-DATA-022/023, INV-AI-004) no
@@ -1979,7 +1997,7 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence, guidanceIds };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, invoicePdfPreview: lastInvoicePdfPreview, toolNames, toolEvidence, guidanceIds };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -2011,6 +2029,11 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
         }
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
+        }
+        if (result && typeof result === 'object' && '_invoicePdf' in result) {
+          const holder = result as { _invoicePdf?: InvoicePdfPreview };
+          if (holder._invoicePdf) lastInvoicePdfPreview = holder._invoicePdf;
+          delete holder._invoicePdf;
         }
         if (result && typeof result === 'object' && '_tao' in result) {
           const holder = result as { _tao?: TaoPreview };
@@ -2050,7 +2073,7 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence, guidanceIds };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, invoicePdfPreview: lastInvoicePdfPreview, toolNames, toolEvidence, guidanceIds };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -2423,7 +2446,7 @@ function hasActionPreview(result: ClaudeAnswerResult): boolean {
   return Boolean(
     result.invoicePreview || result.lateFilingPreview || result.invoiceEditPreview
     || result.postIncorporatePreview || result.arUpdatePreview || result.emailDraftPreview
-    || result.companyUpdatePreview || result.taoPreview,
+    || result.companyUpdatePreview || result.taoPreview || result.invoicePdfPreview,
   );
 }
 
@@ -2585,7 +2608,7 @@ export async function POST(req: NextRequest) {
         invoiceEditPreview: result.invoiceEditPreview, postIncorporatePreview: result.postIncorporatePreview,
         arUpdatePreview: result.arUpdatePreview, exportOffer: result.exportOffer, soaPreview: result.soaPreview,
         emailDraftPreview: result.emailDraftPreview, companyUpdatePreview: result.companyUpdatePreview,
-        taoPreview: result.taoPreview,
+        taoPreview: result.taoPreview, invoicePdfPreview: result.invoicePdfPreview,
       });
     }
     // The rule-based intent router only ever understands plain text — an

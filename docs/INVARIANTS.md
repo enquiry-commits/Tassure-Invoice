@@ -5915,3 +5915,26 @@ again.
   a TAB override flows to TAC ND rows. On the combined ALL parent row the
   names are read-only; edit on the book rows. Missing table = no overrides.
   Guarded by `test-soa-main-pic.ts`, `test-soa-pic-column.ts`.
+
+- **INV-QB-040** — Invoice "Original" vs "Latest", and the monthly originals
+  export (Vincent, 2026-10-08). ONE function decides what the client first
+  received: `getOriginalInvoicePdf` in `lib/invoice-versions.ts` (read-only
+  toward QuickBooks). NOT split by accounting → QuickBooks' current PDF is the
+  original; split → ONLY the PDF attached in QuickBooks that proves it is the
+  original (INV-QB-037, TAO lookup is off); otherwise MISSING with the reason —
+  NEVER the system's redraw (`client-invoice-pdf` falls back to the redraw, so
+  it must not back an "Original" button or the export). A QuickBooks timeout is
+  `transient` (route answers 503, never "missing" 404). Used by (1) the
+  assistant's `find_invoice_pdf` tool + `InvoicePdfCard` (split invoice → 原装
+  Original + 最新 Latest buttons, unsplit → one Download; the model never
+  carries the PDF; each download is logged `chat_invoice_pdf_download`; open
+  to every signed-in colleague), (2) the monthly export page
+  `/billing/soa/originals-export` + `/api/billing/originals-export` (Vincent and
+  Chelsea only): month = INVOICE DATE, voided invoices included and marked
+  `-VOID`, credit notes not included, one ZIP per book built IN THE BROWSER
+  (no month-sized file through the server, nothing stored in the cloud),
+  manifest.csv always, MISSING.csv for invoices with no proven original; an
+  export with invoices that FAILED to load is not recorded as done
+  (`originals_exports`, scripts/add-originals-exports.sql); My Tasks shows the
+  reminder to Vincent/Chelsea from the 1st until last month's three books are
+  recorded. Rules guarded by `test-originals-export.ts`.

@@ -10,7 +10,7 @@ import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import type { SoaReminderProgress } from '@/lib/soa-reminder-progress';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard, InvoicePdfCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, storedMessageToChatMsg,
   type ChatAttachment, type ChatMsg,
@@ -330,6 +330,28 @@ function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }
 // components/assistant/ChatCards.tsx 2026-09-09 (shared with the new
 // floating AssistantWidget).
 
+// Monthly reminder (Vincent, 2026-10-08, INV-QB-040): from the 1st, Vincent and Chelsea are asked to export LAST month's
+// original invoices (one ZIP per book) until all three are made. The API answers 403 for everyone else, so nobody else sees it.
+function OriginalsExportReminder() {
+  const [status, setStatus] = useState<{ month: string; done: string[]; pending: string[] } | null>(null);
+  useEffect(() => {
+    fetch('/api/billing/originals-export?status=1', { cache: 'no-store' })
+      .then(async res => (res.ok ? res.json() : null))
+      .then(json => { if (json?.pending) setStatus(json); })
+      .catch(() => {});
+  }, []);
+  if (!status || !status.pending.length) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#1e3a5f' }}>
+      <div style={{ flex: 1, lineHeight: 1.6 }}>
+        <strong>Monthly task — export the original invoices of {status.month}.</strong>{' '}
+        Still to do: {status.pending.join(', ')}{status.done.length ? ` (done: ${status.done.join(', ')})` : ''}. One ZIP per book; Chelsea files the PDFs on the file server.
+      </div>
+      <a href="/billing/soa/originals-export" style={{ background: '#1d3a5c', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Open export</a>
+    </div>
+  );
+}
+
 export default function MyTasksPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [data, setData] = useState<MyTasksResponse | null>(null);
@@ -590,7 +612,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next.map(toApiMessage), context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, arUpdatePreview: json.arUpdatePreview ?? undefined, exportOffer: json.exportOffer ?? undefined, soaPreview: json.soaPreview ?? undefined, emailDraftPreview: json.emailDraftPreview ?? undefined, companyUpdatePreview: json.companyUpdatePreview ?? undefined, taoPreview: json.taoPreview ?? undefined }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, arUpdatePreview: json.arUpdatePreview ?? undefined, exportOffer: json.exportOffer ?? undefined, soaPreview: json.soaPreview ?? undefined, emailDraftPreview: json.emailDraftPreview ?? undefined, companyUpdatePreview: json.companyUpdatePreview ?? undefined, taoPreview: json.taoPreview ?? undefined, invoicePdfPreview: json.invoicePdfPreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -876,6 +898,9 @@ export default function MyTasksPage() {
                               {message.taoPreview && (
                                 <TaoBillingCard preview={message.taoPreview} conversationId={activeConversationId} />
                               )}
+                              {message.invoicePdfPreview && (
+                                <InvoicePdfCard preview={message.invoicePdfPreview} conversationId={activeConversationId} />
+                              )}
                               {message.companyUpdatePreview && (
                                 <CompanyUpdateCard preview={message.companyUpdatePreview} conversationId={activeConversationId} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                               )}
@@ -970,6 +995,7 @@ export default function MyTasksPage() {
             </div>
           ) : (
             <div style={{ flex: 1, overflowY: 'auto' }}>
+              <OriginalsExportReminder />
               {data && <DailyBriefBanner brief={data.brief} />}
               {data && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 20 }}>{data.scopeNote}</div>}
 

@@ -11,7 +11,7 @@
 import { filenameFromDisposition } from '@/lib/content-disposition';
 import { useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil } from 'lucide-react';
+import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil, Loader2 } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
@@ -34,6 +34,8 @@ import type { EmailDraftPreview } from '@/lib/email-draft-lookup';
 import type { CompanyUpdatePreview } from '@/lib/company-update-lookup';
 // type-only (lib/tao-lookup.ts is server-only)
 import type { TaoPreview } from '@/lib/tao-lookup';
+import type { InvoicePdfPreview, InvoicePdfItem } from '@/lib/invoice-pdf-card';
+import { displayInvoiceNo, invoicePdfFileName } from '@/lib/invoice-filename';
 import TaoInvoiceBuilder from '@/components/billing/TaoInvoiceBuilder';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 // type-only on purpose: a VALUE import here would pull app/billing/page
@@ -73,6 +75,7 @@ export type ChatMsg = {
   emailDraftPreview?: EmailDraftPreview;
   companyUpdatePreview?: CompanyUpdatePreview;
   taoPreview?: TaoPreview;
+  invoicePdfPreview?: InvoicePdfPreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -1496,6 +1499,102 @@ function TaoBuilderModal({ company, onClose }: { company: TaoCompanyRow; onClose
           <TaoInvoiceBuilder company={company} onGenerated={onClose} />
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// find_invoice_pdf card (Vincent, 2026-10-08): the invoices that matched, each with its download button(s). An invoice
+// accounting has split gets TWO — 原装 Original (what the client first received: the proven PDF attached in QuickBooks,
+// INV-QB-037 / lib/invoice-versions.ts, never a redraw) and 最新 Latest (QuickBooks' current, split version); an unsplit
+// invoice has ONE (its Original and Latest are the same file).
+export function InvoicePdfCard({ preview, conversationId }: { preview: InvoicePdfPreview; conversationId?: number | null }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const money = (n: number) => `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const download = async (inv: InvoicePdfItem, version: 'original' | 'latest') => {
+    const noteKey = `${inv.book}|${inv.qbInvoiceId}`;
+    setBusy(`${noteKey}|${version}`);
+    setNotes(n => ({ ...n, [noteKey]: '' }));
+    try {
+      const url = version === 'original'
+        ? `/api/billing/invoice-original?company=${inv.book}&id=${encodeURIComponent(inv.qbInvoiceId)}`
+        : `/api/quickbooks/invoice-pdf?company=${inv.book}&id=${encodeURIComponent(inv.qbInvoiceId)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }));
+        const why = (json as { error?: string }).error ?? 'Could not load the PDF.';
+        setNotes(n => ({
+          ...n,
+          [noteKey]: version === 'original' && res.status === 404
+            ? `No original on file in QuickBooks (${why}). Upload it on the Invoice Originals page, or take the Latest version.`
+            : why,
+        }));
+        return;
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      const base = invoicePdfFileName(inv.book, inv.invoiceNo, inv.customerName, inv.totalAmt);
+      link.href = URL.createObjectURL(blob);
+      link.download = version === 'latest' && inv.split ? base.replace(/\.pdf$/i, '-latest.pdf') : base;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      logActivity('chat_invoice_pdf_download', { book: inv.book, invoiceNo: inv.invoiceNo, version, conversationId });
+    } catch {
+      setNotes(n => ({ ...n, [noteKey]: 'Network error — try again.' }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const btn = (primary: boolean, disabled: boolean) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+    border: `1px solid ${primary ? '#1d3a5c' : '#cbd5e1'}`, background: primary ? '#1d3a5c' : '#fff', color: primary ? '#fff' : '#334155',
+    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1,
+  } as const);
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 520 }}>
+      <div style={{ padding: '9px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', fontSize: 11, fontWeight: 700, color: '#173b61' }}>
+        Invoices — “{preview.query}”{preview.truncated ? ' (newest 8 shown — narrow the search for others)' : ''}
+      </div>
+      {preview.invoices.map(inv => {
+        const noteKey = `${inv.book}|${inv.qbInvoiceId}`;
+        const busyHere = busy?.startsWith(noteKey) ?? false;
+        const spin = <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />;
+        return (
+          <div key={noteKey} style={{ padding: '9px 14px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{inv.book} #{displayInvoiceNo(inv.invoiceNo)}</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{inv.txnDate ?? ''}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#173b61', marginLeft: 'auto' }}>{money(inv.totalAmt)}</span>
+              {inv.status === 'Paid' && <span style={{ fontSize: 9, fontWeight: 700, color: '#15803d' }}>✓ PAID</span>}
+              {inv.status === 'Voided' && <span style={{ fontSize: 9, fontWeight: 700, color: '#b91c1c' }}>VOID</span>}
+            </div>
+            <div style={{ fontSize: 11, color: '#475569', margin: '2px 0 6px' }}>{inv.customerName}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {inv.split ? (
+                <>
+                  <button onClick={() => download(inv, 'original')} disabled={busyHere} style={btn(true, busyHere)} title="What the client first received (the original attached in QuickBooks)">
+                    {busy === `${noteKey}|original` ? spin : <Download size={12} />}原装 Original
+                  </button>
+                  <button onClick={() => download(inv, 'latest')} disabled={busyHere} style={btn(false, busyHere)} title="QuickBooks' current version, as accounting split it">
+                    {busy === `${noteKey}|latest` ? spin : <Download size={12} />}最新 Latest (split)
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => download(inv, 'original')} disabled={busyHere} style={btn(true, busyHere)} title="QuickBooks' PDF — not split, so original and latest are the same file">
+                  {busyHere ? spin : <Download size={12} />}Download PDF
+                </button>
+              )}
+            </div>
+            {notes[noteKey] && <div style={{ marginTop: 5, fontSize: 10.5, color: '#b45309', lineHeight: 1.5 }}>{notes[noteKey]}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 }

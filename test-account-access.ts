@@ -73,6 +73,7 @@ const ACCOUNT_ROUTES = [
   '/billing/quotation',
   '/billing/soa', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', // Outstanding, all 4 books
   '/billing/soa/originals', // Invoice Originals (INV-QB-037): the same departments as Outstanding
+  '/billing/soa/originals-export', // Monthly Originals Export (INV-QB-040): same page rule as Outstanding; the API is Vincent + Chelsea only
   '/turnover-ai', '/turnover-ai/project/1',
 ];
 const EXPECTED_ROUTES: Record<WorkspaceId, string[]> = {
