@@ -1196,7 +1196,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10, marginBottom: 16 }}>
           <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
-            icon={<Receipt size={16} />} color="#1d3a5c" />
+            icon={<Receipt size={16} />} color="#1d3a5c" active={!overpaidOnly} onClick={() => setOverpaidOnly(false)} ariaLabel="Show all clients with a balance" />
           <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub="owed minus overpaid (net)"
             icon={<Receipt size={16} />} color="#0f766e" />
           <MetricCard value={<MoneyValue amount={counts.current} />} label="Current" sub="not yet due (the Current column)"
