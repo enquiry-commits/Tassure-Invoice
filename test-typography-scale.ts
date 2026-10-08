@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SCALE = new Set([9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28]);
-const WEIGHTS = new Set([400, 500, 600, 700]);
+const WEIGHTS = new Set([400, 500, 600, 700, 800]) // 800 = the header workspace title only;
 const files: string[] = ['app/globals.css'];
 const walk = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) { if (n !== 'node_modules') walk(p); } else if (/\.tsx?$/.test(n)) files.push(p); } };
 walk('app'); walk('components');

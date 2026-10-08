@@ -5884,7 +5884,7 @@ again.
   `fontVariantNumeric: 'tabular-nums'`. Exceptions on purpose: the Outlook
   email body box (mimics the client's Outlook) and the Appearance code input;
   PDFs/documents are a separate system (INV-DOC-011). (5) Weights are only
-  400/500/600/700 (the loaded fonts have no 750/800/900). Font SIZES are not
+  400/500/600/700 (800 only for the header workspace title, Inter 800 is loaded for it). Font SIZES are not
   yet unified (35 values; planned step 2).
 
 - **INV-UI-002** — Font sizes come from ONE scale: 9 / 10 / 11 / 12 / 13 / 14 /

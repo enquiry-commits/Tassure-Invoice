@@ -88,7 +88,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <header className="desktop-only flex items-center justify-between px-8 flex-shrink-0 z-50" style={{ height: 70, background: 'var(--header-bg)', borderBottom: '1px solid rgba(30,58,95,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
         <div className="flex items-center" style={{ gap: 12 }}>
           <Image src="/logo.png" alt="Tassure" height={44} width={44} className="object-contain rounded" priority />
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#1e3a5f', letterSpacing: '-0.3px' }}>{title}</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-0.3px' }}>{title}</span>
           {previewing && (
             <span title="你正在预览这个部门的界面——只改变显示的菜单和抬头，你自己的权限没有变" style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 9px' }}>预览中</span>
           )}

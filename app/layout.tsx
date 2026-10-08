@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 // option in lib/theme-tokens.ts's FONT_OPTIONS is preloaded here as its own
 // CSS var so Appearance Settings can switch between them at runtime by just
 // changing which var --font-family points at (lib/apply-theme.ts).
-const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-inter' });
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'], variable: '--font-inter' });
 const lato = Lato({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-lato' });
 const poppins = Poppins({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-poppins' });
 const sourceSans = Source_Sans_3({ subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-source-sans' });
