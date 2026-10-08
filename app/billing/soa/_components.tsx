@@ -154,7 +154,13 @@ function SoaPicSelect({ names, override, onChange }: { names: string[]; override
       onFocus={event => { event.currentTarget.style.borderColor = '#cbd5e1'; event.currentTarget.style.background = '#fff'; }}
       onBlur={event => { event.currentTarget.style.borderColor = 'transparent'; event.currentTarget.style.background = 'transparent'; }}>
       <option value={PIC_AUTO}>{override ? 'Back to QuickBooks PIC' : autoLabel}</option>
-      {allStaffNames().map(name => <option key={name} value={name}>{name}</option>)}
+      {(() => {
+        const teams = staffByTeam();
+        const inTeam = new Set(teams.flatMap(t => t.members.map(m => m.name)));
+        const others = allStaffNames().filter(name => !inTeam.has(name));
+        return [...teams.map(t => ({ label: t.team, names: t.members.map(m => m.name) })), ...(others.length ? [{ label: 'Others', names: others }] : [])]
+          .map(g => <optgroup key={g.label} label={g.label}>{g.names.map(name => <option key={name} value={name}>{name}</option>)}</optgroup>);
+      })()}
     </select>
   );
 }
