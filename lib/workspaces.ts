@@ -29,7 +29,7 @@
 // logic, shared by the browser bundle, proxy.ts and the guard tests.
 
 export type WorkspaceId = 'admin' | 'management' | 'finance' | 'secretarial' | 'account' | 'tax';
-export type AccessGate = 'admin' | 'canViewReports' | 'canViewSgNews' | 'canViewQuotation' | 'canViewTurnoverAI' | 'canViewAiUsage';
+export type AccessGate = 'admin' | 'canViewReports' | 'canViewSgNews' | 'canViewQuotation' | 'canViewTurnoverAI' | 'canViewAiUsage' | 'canViewOriginals';
 export type AccessSubject = { workspace: WorkspaceId } & Partial<Record<AccessGate, boolean>>;
 
 type PageRule = { key: string; patterns: readonly string[]; gate?: AccessGate };
@@ -52,6 +52,9 @@ export const PAGE_RULES: readonly PageRule[] = [
   { key: 'billing-drafts-tab-tac', patterns: ['/billing?tab=billing'] },
   { key: 'billing-drafts-tao', patterns: ['/billing/tao'] },
   { key: 'quotation', patterns: ['/billing/quotation'], gate: 'canViewQuotation' },
+  // Invoice Originals + the monthly originals export: Vincent and Chelsea only (his word, 2026-10-09). Listed BEFORE
+  // 'outstanding' (the first matching rule wins) so these two paths leave the Outstanding departments.
+  { key: 'invoice-originals', patterns: ['/billing/soa/originals', '/billing/soa/originals-export'], gate: 'canViewOriginals' },
   { key: 'outstanding', patterns: ['/billing/soa'] },
   { key: 'email-status', patterns: ['/client-communications'] },
   { key: 'post-incorporate', patterns: ['/post-incorporate'] },
@@ -80,7 +83,7 @@ export const WORKSPACES: Record<WorkspaceId, Workspace> = {
   },
   finance: {
     id: 'finance', title: 'TCS FINANCE', home: '/',
-    pages: ['dashboard', 'my-tasks', 'companies', 'master-list', ...BILLING_SYSTEM],
+    pages: ['dashboard', 'my-tasks', 'companies', 'master-list', ...BILLING_SYSTEM, 'invoice-originals'],
   },
   secretarial: {
     id: 'secretarial', title: 'TCS CORPSEC', home: '/',

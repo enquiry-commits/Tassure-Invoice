@@ -166,7 +166,7 @@ check('chunks keep every item once and in order', JSON.stringify(chunk([1, 2, 3,
   console.log('\n--- where it lives ---');
   const leaf = navLeaves(NAV_TREE).find(l => l.node.href === '/billing/soa/originals');
   check('a menu entry under Billing System', !!leaf && leaf.trail.join(' > ') === 'Billing System' && leaf.node.label === 'Invoice Originals', JSON.stringify(leaf?.trail));
-  check('the page is covered by the existing Outstanding access rule (no new rule, same departments)', pageRuleFor('/billing/soa/originals', new URLSearchParams())?.key === 'outstanding');
+  check('the page has its own gated rule: Vincent and Chelsea only (2026-10-09)', pageRuleFor('/billing/soa/originals', new URLSearchParams())?.key === 'invoice-originals' && pageRuleFor('/billing/soa/originals-export', new URLSearchParams())?.key === 'invoice-originals' && pageRuleFor('/billing/soa/all', new URLSearchParams())?.key === 'outstanding');
   const next = read('next.config.ts');
   const block = (route: string) => next.slice(next.indexOf(`'${route}'`), next.indexOf(']', next.indexOf(`'${route}'`)));
   check('both routes that open PDFs ship pdf-parse and pdfjs-dist', ['/api/billing/originals', '/api/billing/originals/upload'].every(r => next.includes(`'${r}'`) && block(r).includes('./node_modules/pdf-parse/**') && block(r).includes('./node_modules/pdfjs-dist/**')));

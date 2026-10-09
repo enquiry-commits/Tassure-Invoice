@@ -109,6 +109,9 @@ export type ApprovedAccount = {
   // flag rather than `admin`, so handing someone admin later never also
   // hands them everyone's usage.
   canViewAiUsage?: boolean;
+  // Gates Invoice Originals (app/billing/soa/originals) and the monthly originals export — Vincent and Chelsea only
+  // (Vincent, 2026-10-09: "只开给我和 Chelsea 可以看到"). Its own flag so the page list and the person stay explicit.
+  canViewOriginals?: boolean;
 };
 
 // Grouped by TCS department (Vincent, 2026-10-04 — see lib/workspaces.ts for
@@ -117,7 +120,7 @@ export type ApprovedAccount = {
 // Ang Shi Ming.
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // TCS ADMIN
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', workspace: 'admin', canSwitchWorkspace: true, admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true, canViewAiUsage: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', canViewOriginals: true, workspace: 'admin', canSwitchWorkspace: true, admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true, canViewAiUsage: true },
   // TCS MANAGEMENT
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },
@@ -137,7 +140,7 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Tan Min Quan', email: 'minquan@tassure.com', workspace: 'secretarial', canViewQuotation: true },
   // TCS FINANCE
   { name: 'Esther Loo', email: 'esther@tassure.com', workspace: 'finance', canViewQuotation: true, qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', workspace: 'finance', canViewQuotation: true, qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', canViewOriginals: true, workspace: 'finance', canViewQuotation: true, qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
   // TCS ACCOUNT (Jay is the head) — AR Reminder was their only page from
   // 2026-08-17 and stays their home; TAO Billing joined 2026-10-04 ("TAO 这边
   // 就是主要给 ACC 和 TAX 去开单的"); the department split the same day opened

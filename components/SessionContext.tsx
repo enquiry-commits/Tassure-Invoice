@@ -20,6 +20,7 @@ export type SessionUser = {
   canViewQuotation: boolean;
   canViewTurnoverAI: boolean;
   canViewAiUsage: boolean;
+  canViewOriginals: boolean;
 };
 
 type Session = { user: SessionUser | null; canOpen: (href: string) => boolean };

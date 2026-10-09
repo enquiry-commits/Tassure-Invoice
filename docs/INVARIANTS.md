@@ -5938,3 +5938,9 @@ again.
   (`originals_exports`, scripts/add-originals-exports.sql); My Tasks shows the
   reminder to Vincent/Chelsea from the 1st until last month's three books are
   recorded. Rules guarded by `test-originals-export.ts`.
+  ACCESS (2026-10-09, Vincent: "Invoice Originals 页面只开给我和 Chelsea"): `/billing/soa/originals`
+  and `/billing/soa/originals-export` are their own page rule `invoice-originals`
+  (listed before `outstanding`), gated by the per-account flag `canViewOriginals`
+  — Vincent and Chelsea only; the page list (TCS FINANCE) and the flag must both
+  allow it, so Esther (same department) does not see it. The originals API
+  routes already check the page rule, so they follow.

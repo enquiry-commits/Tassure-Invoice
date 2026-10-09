@@ -33,6 +33,7 @@ export async function GET() {
       canViewQuotation: account.canViewQuotation ?? false,
       canViewTurnoverAI: account.canViewTurnoverAI ?? false,
       canViewAiUsage: account.canViewAiUsage ?? false,
+      canViewOriginals: account.canViewOriginals ?? false,
     },
   });
 }

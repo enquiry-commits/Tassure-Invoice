@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-09 (CHANGED, access: Invoice Originals and the monthly Originals Export are now visible only to Vincent and Chelsea — Vincent: "Invoice Originals 页面只开给我和 Chelsea 可以看到").
+
+**What changed (INV-QB-040).** New page rule `invoice-originals` (`/billing/soa/originals`, `/billing/soa/originals-export`) before `outstanding`, gated by a new per-account flag `canViewOriginals` (only Vincent and Chelsea carry it); TCS FINANCE's page list includes the rule, so Esther — same department — does not see it. The menu entry, the assistant's page map and the `/api/billing/originals*` routes (which already ask the page rule) follow automatically. Other departments lose the page they could open before (Outstanding departments: ACCOUNT, TAX, CORPSEC, MANAGEMENT, FINANCE). Tests updated: `test-account-access.ts` (new check pins exactly these two people), `test-assistant-pages.ts`, `test-original-status.ts`.
+
+**Verification.** `tsc` 0; the three access tests ALL OK. **Not verified in a browser** as a non-admin account (cannot sign in as others); the rule is covered by the access table test. The SOA itself still merges originals for everyone — only the to-do/upload page is restricted.
+
 Last updated: 2026-10-09 (CHANGED, look only: Company 360's top card — every value is now in a box like the Client Since Note box, 20% narrower than its column; Vincent: "全部换成有格子的…按照 Client Since Note 格子的比例，但是缩短20%，还是5等分不变").
 
 **What changed.** New `app/companies/[id]/FieldBox.tsx` (one box style + `ReadBox`). The read-only values (UEN with its copy icon, Status, Client Type, Company Type, FYE, Parent Company, Secretary PIC, Contact, SSIC, Tel, Invoice Address) sit in a faint-grey box; the existing controls (Customer Source, Client Since, Referred By, RM, Client Since Note) keep their behaviour and now use the same box at the same 80% width (white fill, so editable vs read-only is still visible). The 5 equal columns are unchanged. No data or save logic touched.

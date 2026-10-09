@@ -80,7 +80,7 @@ check('Chelsea (Finance) opens Companies, Outstanding, TAO, Master List, Quotati
 check('Chelsea cannot open Post Incorporate, Proposal Generator, Reports, SG News, Turnover AI or the admin pages', ['/post-incorporate', '/sso/proposal-generator', '/reports', '/sg-news', '/turnover-ai', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'].every(h => !labels(chelsea).includes(h)), labels(chelsea).join(', '));
 check('Cindy (Management) opens Reports and Quotation', labels(cindy).includes('/reports') && labels(cindy).includes('/billing/quotation'));
 check('Cindy cannot open Turnover AI, SG News or Activity Insights', ['/turnover-ai', '/sg-news', '/activity-insights'].every(h => !labels(cindy).includes(h)));
-const ACC_TAX_PAGES = ['/', '/billing/quotation', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', '/billing/soa/originals', '/billing/soa/originals-export', '/billing/tao', '/billing?tab=ar', '/billing?tab=billing', '/companies', '/my-tasks'];
+const ACC_TAX_PAGES = ['/', '/billing/quotation', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', '/billing/tao', '/billing?tab=ar', '/billing?tab=billing', '/companies', '/my-tasks'];
 check('Jay (TCS ACCOUNT) sees exactly Dashboard, Companies, AR Reminder, Billing Drafts, Quotation, Outstanding, My Tasks, Turnover AI', JSON.stringify(labels(jay).sort()) === JSON.stringify([...ACC_TAX_PAGES, '/turnover-ai'].sort()), labels(jay).join(', '));
 check('Clarence (TCS TAX) sees the same minus Turnover AI', JSON.stringify(labels(clarence).sort()) === JSON.stringify([...ACC_TAX_PAGES].sort()), labels(clarence).join(', '));
 check('unidentified caller sees no gated page', pagesFor(null).every(p => !p.access));

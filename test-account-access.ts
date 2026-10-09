@@ -65,6 +65,8 @@ const missing = accTax.filter(s => !getApprovedAccount(s.email)).map(s => s.name
 check('no Accounting/Tax staff member is left without a login', missing.length === 0, missing.join(', '));
 
 console.log('\n--- the access table, route by route ---');
+// Invoice Originals (INV-QB-037) + the monthly export (INV-QB-040): Vincent and Chelsea only (his word, 2026-10-09).
+const ORIGINALS_ROUTES = ['/billing/soa/originals', '/billing/soa/originals-export'];
 const NOT_FOR_MANAGEMENT = ['/sg-news', '/turnover-ai', '/turnover-ai/project/1', '/admin/appearance', '/ai-learning', '/ai-quality', '/ai-usage', '/activity-insights'];
 const ACCOUNT_ROUTES = [
   '/', '/my-tasks', '/companies', '/companies/1',
@@ -72,22 +74,21 @@ const ACCOUNT_ROUTES = [
   '/billing', '/billing?tab=billing', '/billing/tao', // Billing Drafts: TAB/TAC and TAO
   '/billing/quotation',
   '/billing/soa', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', // Outstanding, all 4 books
-  '/billing/soa/originals', // Invoice Originals (INV-QB-037): the same departments as Outstanding
-  '/billing/soa/originals-export', // Monthly Originals Export (INV-QB-040): same page rule as Outstanding; the API is Vincent + Chelsea only
   '/turnover-ai', '/turnover-ai/project/1',
 ];
 const EXPECTED_ROUTES: Record<WorkspaceId, string[]> = {
   admin: ROUTES,
-  management: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r)),
-  secretarial: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r) && r !== '/reports'),
-  finance: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r) && !['/reports', '/post-incorporate', '/sso/proposal-generator'].includes(r)),
+  management: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r) && !ORIGINALS_ROUTES.includes(r)),
+  secretarial: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r) && !ORIGINALS_ROUTES.includes(r) && r !== '/reports'),
+  finance: ROUTES.filter(r => !NOT_FOR_MANAGEMENT.includes(r) && !ORIGINALS_ROUTES.includes(r) && !['/reports', '/post-incorporate', '/sso/proposal-generator'].includes(r)),
   account: ACCOUNT_ROUTES,
   tax: ACCOUNT_ROUTES.filter(r => !r.startsWith('/turnover-ai')),
 };
 check(`the table covers ${ROUTES.length} routes`, ROUTES.length >= 40, String(ROUTES.length));
 for (const a of APPROVED_ACCOUNTS) {
   const opens = ROUTES.filter(r => can(a, r));
-  const expected = [...EXPECTED_ROUTES[a.workspace]].sort();
+  // the originals pages: only the accounts carrying the flag (Vincent, Chelsea) — never by department
+  const expected = [...EXPECTED_ROUTES[a.workspace], ...(a.workspace !== 'admin' && a.canViewOriginals ? ORIGINALS_ROUTES : [])].sort();
   const extra = opens.filter(r => !expected.includes(r));
   const lost = expected.filter(r => !opens.includes(r));
   check(`${a.name} (${WORKSPACES[a.workspace].title}) opens exactly its ${expected.length} routes`, !extra.length && !lost.length, `extra: ${extra.join(', ') || '-'}; missing: ${lost.join(', ') || '-'}`);
@@ -106,9 +107,11 @@ check('a prefix never leaks into a sibling path (/companies-x is not Companies)'
 // two must agree, so moving someone into a department never silently grants
 // (say) the power to create real QuickBooks Estimates.
 for (const a of APPROVED_ACCOUNTS.filter(x => x.workspace !== 'admin')) {
-  const mismatched = PAGE_RULES.filter(rule => rule.gate && workspaceIncludes(WORKSPACES[a.workspace], rule.key) !== !!a[rule.gate]).map(r => `${r.key}/${r.gate}`);
+  // invoice-originals is per PERSON inside TCS FINANCE (Chelsea yes, Esther no): the department lists the page, the flag narrows it
+  const mismatched = PAGE_RULES.filter(rule => rule.gate && rule.gate !== 'canViewOriginals' && workspaceIncludes(WORKSPACES[a.workspace], rule.key) !== !!a[rule.gate]).map(r => `${r.key}/${r.gate}`);
   check(`${a.name}: page list and permission flags agree`, mismatched.length === 0, mismatched.join(', '));
 }
+check('Invoice Originals + the originals export: ONLY Vincent and Chelsea — his word, "只开给我和 Chelsea"', JSON.stringify(APPROVED_ACCOUNTS.filter(a => ORIGINALS_ROUTES.every(r => can(a, r))).map(a => a.email).sort()) === JSON.stringify(['chelsea@tassure.com', 'vincent@tassure.com']) && APPROVED_ACCOUNTS.filter(a => a.canViewOriginals).length === 2);
 check('Quotation (creates real QuickBooks Estimates) is open to every account — Vincent chose 所有部门', APPROVED_ACCOUNTS.every(a => a.canViewQuotation && can(a, '/billing/quotation')));
 check('AI Usage (everyone\'s AI tokens and cost): Vincent only — his choice, "只有我"', JSON.stringify(APPROVED_ACCOUNTS.filter(a => a.canViewAiUsage).map(a => a.email)) === JSON.stringify(['vincent@tassure.com']) && APPROVED_ACCOUNTS.every(a => can(a, '/ai-usage') === (a.email === 'vincent@tassure.com')));
 check('Turnover AI: Vincent + the 5 TCS ACCOUNT staff only', JSON.stringify(APPROVED_ACCOUNTS.filter(a => a.canViewTurnoverAI).map(a => a.email).sort()) === JSON.stringify(['vincent@tassure.com', ...EXPECTED_MEMBERS.account].sort()));
@@ -122,7 +125,8 @@ check('Vincent can preview all 6 departments; TCS MANAGEMENT all but ADMIN', swi
 check('nobody else can switch', APPROVED_ACCOUNTS.filter(a => !a.canSwitchWorkspace).every(a => switchableWorkspaces(a).length === 0));
 const preview = (a: ApprovedAccount, ws: WorkspaceId) => ROUTES.filter(r => { const u = new URL(r, 'https://app.local'); return canSubjectOpen(a, u.pathname, u.searchParams, ws); });
 for (const ws of WORKSPACE_ORDER) {
-  const member = APPROVED_ACCOUNTS.find(a => a.workspace === ws)!;
+  // TCS FINANCE: compare with Chelsea (she carries the originals flag the department page list allows); Esther sees a subset
+  const member = APPROVED_ACCOUNTS.filter(a => a.workspace === ws).sort((x, y) => Number(!!y.canViewOriginals) - Number(!!x.canViewOriginals))[0];
   check(`Vincent previewing ${WORKSPACES[ws].title} sees exactly what ${member.name} sees`, JSON.stringify(preview(vincent, ws)) === JSON.stringify(ROUTES.filter(r => can(member, r))));
 }
 check('a preview can only narrow: Cindy previewing TCS ACCOUNT never sees Turnover AI (not hers to open)', !preview(cindy, 'account').includes('/turnover-ai') && preview(cindy, 'account').every(r => can(cindy, r)));
