@@ -3,6 +3,8 @@ import { normalize, matchScore, significantWord, closestNearMiss } from './compa
 import { computeSoaRows, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
 import { loadCurrentQbValues, withCurrentQbValues } from './current-invoice-values';
+import { pickContact, type CompanyRow as CommsCompanyRow } from './client-comms-resolve';
+import { parseEmailList } from './campaign-recipients';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
 
 // Company 360 — one aggregation function, imported by both the page
@@ -110,6 +112,9 @@ export type Company360 = {
   };
   communications: {
     drafts: Record<string, unknown>[];
+    // The To / CC the system itself would put on an email to this client (INV-MAIL-001), shown ready to copy so a colleague
+    // who sends from Gmail yourself uses the same addresses. source: where the To came from.
+    recipients: { to: string[]; cc: string[]; source: 'teamwork_report' | 'company_fallback' | 'missing'; reviewRequired: boolean };
   };
   documentsGenerated: Record<string, unknown>[];
   trademark: (Record<string, unknown> & { matchScore: number })[];
@@ -137,6 +142,12 @@ export type Company360 = {
     warnings: string[];
   };
 };
+
+// The recipients the system would use for this company (the same pickContact() the Email Drafts workbench resolves with).
+function companyRecipients(companyRow: Record<string, unknown>): Company360['communications']['recipients'] {
+  const picked = pickContact(companyRow as unknown as CommsCompanyRow);
+  return { to: parseEmailList(picked.email ?? ''), cc: parseEmailList(picked.ccEmail ?? ''), source: picked.source, reviewRequired: picked.reviewRequired };
+}
 
 export async function getCompany360(supabase: SupabaseClient, id: number): Promise<Company360 | null> {
   const { data: companyRow } = await supabase.from('companies').select('*').eq('id', id).maybeSingle();
@@ -358,7 +369,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     arReminderCycles,
     invoices: { generated, quickbooks },
     nomineeDirector: { appointments },
-    communications: { drafts: draftRows ?? [] },
+    communications: { drafts: draftRows ?? [], recipients: companyRecipients(companyRow) },
     documentsGenerated: postIncorpRows ?? [],
     trademark,
     officials: officialRows ?? [],

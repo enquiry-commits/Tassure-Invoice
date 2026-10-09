@@ -162,7 +162,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           so the two visually adjacent sections actually align. Outstanding
           inserted 2026-09-08 as the new module 3 ("在第3模块加上 Outstanding
           板块"), pushing AR/AGM Cycles to module 4. */}
-      <CommsSection drafts={data.communications.drafts} />
+      <CommsSection drafts={data.communications.drafts} recipients={data.communications.recipients} />
       <OutstandingSection outstanding={data.outstanding} />
       <ArAgmSection cycles={data.arReminderCycles} />
       <OfficialsSection officials={data.officials} />

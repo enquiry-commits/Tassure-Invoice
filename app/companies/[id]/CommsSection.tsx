@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Trash2 } from 'lucide-react';
+import { Check, Copy, Mail, Trash2 } from 'lucide-react';
 import { fmtDate } from '@/lib/date';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { DataCard } from './DataCard';
@@ -23,8 +23,12 @@ import type { Company360 } from '@/lib/company-360';
 // never saw and didn't ask to touch.
 const GRID_6_COLS = 'repeat(5, minmax(0,1fr)) 28px';
 
-export function CommsSection({ drafts: initialDrafts }: { drafts: Company360['communications']['drafts'] }) {
+export function CommsSection({ drafts: initialDrafts, recipients }: { drafts: Company360['communications']['drafts']; recipients: Company360['communications']['recipients'] }) {
   const [drafts, setDrafts] = useState(initialDrafts);
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = async (label: string, list: readonly string[]) => {
+    try { await navigator.clipboard.writeText(list.join(', ')); setCopied(label); setTimeout(() => setCopied(c => (c === label ? null : c)), 2000); } catch { /* the box is select-all, so it can still be copied by hand */ }
+  };
   const [pendingDelete, setPendingDelete] = useState<Company360['communications']['drafts'][number] | null>(null);
   const [deleteError, setDeleteError] = useState('');
 
@@ -48,7 +52,31 @@ export function CommsSection({ drafts: initialDrafts }: { drafts: Company360['co
   };
 
   return (
-    <DataCard title="Email Status" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
+    <DataCard title="Email Status" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet."
+      // The To / CC the system would put on an email to this client, ready to copy (Vincent, 2026-10-09): colleagues who
+      // want to send something extra from Gmail themselves use the same addresses (the same resolver Billing Drafts uses).
+      header={(
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'grid', gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+          Email addresses for this client — copy into Gmail
+          {recipients.source === 'teamwork_report' && <span style={{ fontWeight: 500, color: '#94a3b8' }}> · from the TeamWork contact report</span>}
+          {recipients.source === 'company_fallback' && <span style={{ fontWeight: 500, color: '#b45309' }}> · no TeamWork contact — using the one email on file, please check it</span>}
+          {recipients.source === 'missing' && <span style={{ fontWeight: 500, color: '#b91c1c' }}> · no client email on file</span>}
+        </div>
+        {([['To', recipients.to], ['CC', recipients.cc]] as const).map(([label, list]) => (
+          <div key={label} style={{ display: 'grid', gridTemplateColumns: '34px 1fr auto', gap: 10, alignItems: 'start' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#1d3a5c', paddingTop: 5 }}>{label}</span>
+            <div style={{ fontSize: 12, color: list.length ? '#1e293b' : '#94a3b8', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 9px', wordBreak: 'break-all', lineHeight: 1.6, userSelect: 'all' }}>
+              {list.length ? list.join(', ') : '—'}
+            </div>
+            <button type="button" disabled={!list.length} onClick={() => void copy(label, list)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #cbd5e1', background: copied === label ? '#f0fdf4' : '#fff', color: copied === label ? '#15803d' : '#1d3a5c', borderRadius: 6, padding: '5px 11px', fontSize: 11, fontWeight: 700, cursor: list.length ? 'pointer' : 'default', opacity: list.length ? 1 : 0.5, whiteSpace: 'nowrap' }}>
+              {copied === label ? <Check size={12} /> : <Copy size={12} />}{copied === label ? 'Copied' : `Copy ${label}`}
+            </button>
+          </div>
+        ))}
+      </div>
+      )}>
       {/* Genuinely equal 5-way column split matching the header card's own
           grid (2026-09-04, Vincent: "分成5等分列宽和 第一模块的5等分列宽一致",
           then "上下没有对齐" once the first attempt — table colgroup

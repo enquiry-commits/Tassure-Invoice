@@ -22,8 +22,10 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 // naturally excluded already). The count badge stays visible even while
 // collapsed — the whole point of it is letting someone judge "is this
 // worth opening" without opening it.
-export function DataCard({ title, icon, count, empty, children, scrollable = true }: {
+export function DataCard({ title, icon, count, empty, children, scrollable = true, header }: {
   title: string; icon: React.ReactNode; count: number; empty: string; children?: React.ReactNode;
+  // shown above the rows whenever the card is open — even when there are no rows (Email Status: the client's To / CC)
+  header?: React.ReactNode;
   // 2026-09-03, Vincent on Officials specifically ("这一块不需要限制长度有多
   // 少显示多少") — the 360px internal scroll every other section here still
   // uses is fine for occasional overflow, but Officials can genuinely run to
@@ -66,6 +68,7 @@ export function DataCard({ title, icon, count, empty, children, scrollable = tru
           {open ? <ChevronDown size={14} color={barColor} /> : <ChevronRight size={14} color={barColor} />}
         </span>
       </div>
+      {open && header}
       {open && (
         count === 0 ? (
           <div style={{ padding: '24px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{empty}</div>
