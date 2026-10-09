@@ -1,5 +1,6 @@
 'use client';
 
+import { FIELD_BOX, FIELD_WIDTH } from './FieldBox';
 import { useState } from 'react';
 import { CUSTOMER_SOURCE_OPTIONS } from '@/lib/customer-source';
 import { useCustomerSource } from './CustomerSourceContext';
@@ -37,7 +38,7 @@ export default function CustomerSourceField({ companyId, initialValue }: { compa
       value={value}
       disabled={saving}
       onChange={e => save(e.target.value)}
-      style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f' }}
+      style={{ ...FIELD_BOX, width: FIELD_WIDTH, background: '#fff' }}
     >
       <option value="">Unknown</option>
       {CUSTOMER_SOURCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

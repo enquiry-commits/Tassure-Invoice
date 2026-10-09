@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCustomerSource } from './CustomerSourceContext';
+import { FIELD_BOX, FIELD_WIDTH, ReadBox } from './FieldBox';
 
 // Company 360's client-relationship row: Client Since / Referred By / RM.
 // Saves each field on change via /api/companies/relationship; the two pickers
@@ -11,7 +12,7 @@ type Contact = { id: number; name: string; kind: 'internal' | 'external' };
 type Field = 'clientSince' | 'clientSinceNote' | 'referrerContactId' | 'rmContactId';
 
 const LABEL_STYLE = { fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 } as const;
-const INPUT_STYLE = { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f' } as const;
+const INPUT_STYLE = { ...FIELD_BOX, width: FIELD_WIDTH, background: '#fff' } as const;
 const ADD_NEW = '__add_new__';
 
 export default function RelationshipFields({ invoiceAddress, companyId, masterListJoinDates, initialClientSince, initialClientSinceNote, initialReferrerId, initialRmId }: {
@@ -170,7 +171,7 @@ export default function RelationshipFields({ invoiceAddress, companyId, masterLi
         <div>
           {invoiceAddress != null && (<>
             <div style={LABEL_STYLE}>Invoice Address</div>
-            <div style={{ fontSize: 12 }}>{invoiceAddress}</div>
+            <ReadBox>{invoiceAddress}</ReadBox>
           </>)}
         </div>
         <div>
@@ -195,7 +196,7 @@ export default function RelationshipFields({ invoiceAddress, companyId, masterLi
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
             placeholder="e.g. Re-joined — earlier engagement terminated"
             maxLength={300}
-            style={{ ...INPUT_STYLE, width: '100%', minWidth: 0 }}
+            style={{ ...INPUT_STYLE, minWidth: 0 }}
           />
         </div>
       </div>

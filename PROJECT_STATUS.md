@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-09 (CHANGED, look only: Company 360's top card — every value is now in a box like the Client Since Note box, 20% narrower than its column; Vincent: "全部换成有格子的…按照 Client Since Note 格子的比例，但是缩短20%，还是5等分不变").
+
+**What changed.** New `app/companies/[id]/FieldBox.tsx` (one box style + `ReadBox`). The read-only values (UEN with its copy icon, Status, Client Type, Company Type, FYE, Parent Company, Secretary PIC, Contact, SSIC, Tel, Invoice Address) sit in a faint-grey box; the existing controls (Customer Source, Client Since, Referred By, RM, Client Since Note) keep their behaviour and now use the same box at the same 80% width (white fill, so editable vs read-only is still visible). The 5 equal columns are unchanged. No data or save logic touched.
+
+**Verification.** `tsc` 0; typography guard ALL OK. **Not verified in a browser** (no login in the pane): tall values (Invoice Address, Company Type, SSIC) grow the box downward instead of being cut, which I expect but did not see.
+
 Last updated: 2026-10-09 (NEW: Company 360 › Email Status shows the client's To and CC, ready to copy — Vincent: "要有一个地方写好 to 和 cc 的 email，方便其他员工想要自己额外在 gmail 发给客户").
 
 **What changed.** The Email Status card on Company 360 now opens with a strip: To and CC addresses with "Copy To" / "Copy CC" buttons (comma-separated for Gmail), and a note of where the To came from (TeamWork contact report / the one email on file — "please check it" / none). It uses `pickContact()` — the SAME resolver Billing Drafts and Email Drafts use (INV-MAIL-001: external → To; Tassure → CC; hoechyi always CC; kahye replaces sengxin), so a colleague sending from Gmail uses the same addresses as the system. Shown even when the company has no email records yet (new `header` prop on DataCard). Read-only; nothing written.

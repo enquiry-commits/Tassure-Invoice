@@ -4,6 +4,7 @@ import { ArrowLeft, Building2 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase';
 import { getCompany360 } from '@/lib/company-360';
 import { formatStaffName } from '@/lib/staff-directory';
+import { ReadBox } from './FieldBox';
 import CopyUenButton from './CopyUenButton';
 import CustomerSourceField from './CustomerSourceField';
 import RelationshipFields from './RelationshipFields';
@@ -78,31 +79,31 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 16 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>UEN</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <ReadBox>
                 <span className="company-registration-text">{company.registrationNo || '—'}</span>
                 {company.registrationNo && <CopyUenButton uen={company.registrationNo} />}
-              </div>
+              </ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Status</div>
-              <StatusBadge status={company.twStatus} />
+              <ReadBox><StatusBadge status={company.twStatus} /></ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Client Type</div>
-              <div style={{ fontSize: 12 }}>{company.clientType || '—'}</div>
+              <ReadBox>{company.clientType || '—'}</ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Company Type</div>
-              <div style={{ fontSize: 12 }}>{company.companyType || '—'}</div>
+              <ReadBox>{company.companyType || '—'}</ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>FYE</div>
-              <div style={{ fontSize: 12 }}>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</div>
+              <ReadBox>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</ReadBox>
             </div>
             {company.parentCompanyName && (
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Parent Company</div>
-                <div style={{ fontSize: 12 }}>{company.parentCompanyName}</div>
+                <ReadBox>{company.parentCompanyName}</ReadBox>
               </div>
             )}
           </div>
@@ -110,11 +111,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 16 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Secretary PIC</div>
-              <div style={{ fontSize: 12 }}>{formatStaffName(company.secPic ?? company.pic) || '—'}</div>
+              <ReadBox>{formatStaffName(company.secPic ?? company.pic) || '—'}</ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Contact</div>
-              <div style={{ fontSize: 12 }}>{company.primaryContact?.contactName || company.bestEmail || '—'}</div>
+              <ReadBox>{company.primaryContact?.contactName || company.bestEmail || '—'}</ReadBox>
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
@@ -122,18 +123,18 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
-              <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
+              <ReadBox>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</ReadBox>
             </div>
             {company.ssicCode2 && (
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
-                <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
+                <ReadBox>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</ReadBox>
               </div>
             )}
             {ml?.tel != null && (
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Tel</div>
-                <div style={{ fontSize: 12 }}>{(ml.tel as string) || '—'}</div>
+                <ReadBox>{(ml.tel as string) || '—'}</ReadBox>
               </div>
             )}
           </div>
