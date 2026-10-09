@@ -67,8 +67,9 @@ console.log('\n--- 2. wiring: only the SOA detail asks for the client copy ---')
   };
   ['app', 'components'].forEach(walk);
   const askers = files.filter(f => /<BillingInvoiceReference\b[^>]*\bview=["{]/.test(read(f).replace(/\n/g, ' ')));
-  check('exactly ONE page asks for the client copy: the SOA detail (Billing Drafts, AR, Company 360 and TAO chips are staff-facing and keep QuickBooks\' own PDF)',
-    askers.length === 1 && askers[0] === 'app/billing/soa/_components.tsx', askers.join(', '));
+  check('only the SOA detail asks for the client copy and the assistant invoice card for the original (Billing Drafts, AR, Company 360 and TAO chips are staff-facing and keep QuickBooks\' own PDF)',
+    askers.length === 2 && askers.includes('app/billing/soa/_components.tsx') && askers.includes('components/assistant/ChatCards.tsx'), askers.join(', '));
+  check('the assistant invoice card (INV-QB-040) asks only for view="original", never the client copy', !/view="client"/.test(read('components/assistant/ChatCards.tsx')));
   check('… and it asks for it with view="client"', /<BillingInvoiceReference[^>]*view="client"/.test(soa.replace(/\n/g, ' ')));
   check('the chip\'s own default is QuickBooks\' own PDF', /view = 'quickbooks'/.test(chip));
   check('the chip sends what invoicePdfRequest decides — no second URL builder in the component', /fetch\(request\.url\)/.test(chip) && !/URLSearchParams/.test(chip)
@@ -79,6 +80,11 @@ console.log('\n--- 2. wiring: only the SOA detail asks for the client copy ---')
   check('the route the chip calls takes a numeric Id and sets that header', /\^\\d\+\$/.test(route) && /X-Client-Invoice-Fallback/.test(route));
   check('the request builder is pure (no database, no fetch, no server-only)', !/supabase|server-only|process\.env|fetch\(/.test(stripComments(pure)));
 }
+
+console.log('--- the assistant card: view original (INV-QB-040) ---');
+check('view original opens /api/billing/invoice-original with the Id', invoicePdfRequest({ company: 'TAB', id: '77', lookupNo: '1', docType: 'invoice', view: 'original' }).url === '/api/billing/invoice-original?company=TAB&id=77');
+check('view original without an Id falls back to QuickBooks own PDF (never a wrong document)', invoicePdfRequest({ company: 'TAB', id: null, lookupNo: '02610547', docType: 'invoice', view: 'original' }).url.startsWith('/api/quickbooks/invoice-pdf'));
+check('a credit note is never opened as an original', invoicePdfRequest({ company: 'TAB', id: '5', lookupNo: '1', docType: 'credit', view: 'original' }).url.includes('creditmemo'));
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

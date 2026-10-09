@@ -35,7 +35,8 @@ import type { CompanyUpdatePreview } from '@/lib/company-update-lookup';
 // type-only (lib/tao-lookup.ts is server-only)
 import type { TaoPreview } from '@/lib/tao-lookup';
 import type { InvoicePdfPreview, InvoicePdfItem } from '@/lib/invoice-pdf-card';
-import { displayInvoiceNo, invoicePdfFileName } from '@/lib/invoice-filename';
+import { invoicePdfFileName } from '@/lib/invoice-filename';
+import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import TaoInvoiceBuilder from '@/components/billing/TaoInvoiceBuilder';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 // type-only on purpose: a VALUE import here would pull app/billing/page
@@ -1568,7 +1569,15 @@ export function InvoicePdfCard({ preview, conversationId }: { preview: InvoicePd
         return (
           <div key={noteKey} style={{ padding: '9px 14px', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{inv.book} #{displayInvoiceNo(inv.invoiceNo)}</span>
+              {/* the same chip as everywhere else: click = the PDF opens in a new tab, so you can look before you download */}
+              {inv.split ? (
+                <>
+                  <BillingInvoiceReference company={inv.book} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} view="original" suffix="原装" title="Open the original (what the client first received) in a new tab" />
+                  <BillingInvoiceReference company={inv.book} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} suffix="最新" title="Open QuickBooks' current, split version in a new tab" />
+                </>
+              ) : (
+                <BillingInvoiceReference company={inv.book} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} view="original" title="Open the invoice PDF in a new tab" />
+              )}
               <span style={{ fontSize: 11, color: '#64748b' }}>{inv.txnDate ?? ''}</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#173b61', marginLeft: 'auto' }}>{money(inv.totalAmt)}</span>
               {inv.status === 'Paid' && <span style={{ fontSize: 9, fontWeight: 700, color: '#15803d' }}>✓ PAID</span>}

@@ -45,12 +45,15 @@ import { invoicePdfRequest, type InvoiceChipView } from '@/lib/invoice-pdf-reque
  * chip turns amber and says why (the route's X-Client-Invoice-Fallback) — it
  * never opens a split invoice silently.
  */
-export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'invoice', title, muted = false, view = 'quickbooks' }: {
+export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'invoice', title, muted = false, view = 'quickbooks', suffix }: {
   company: QbCompany; invoiceNo?: string | null; id?: string | null; docType?: 'invoice' | 'credit'; title?: string; muted?: boolean;
   view?: InvoiceChipView;
+  // a short word after the number, e.g. "原装" / "最新" when one invoice has two chips (the assistant's invoice card)
+  suffix?: string;
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [fallback, setFallback] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
   // Which request this chip sends is decided in lib/invoice-pdf-request.ts (pure, pinned by test-soa-invoice-chip.ts).
   const request = invoicePdfRequest({ company, id, lookupNo: invoiceNo ? displayInvoiceNo(invoiceNo) : null, docType, view });
   const clientView = request.client;
@@ -79,15 +82,16 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
       const url = URL.createObjectURL(blob);
       if (tab) tab.location.href = url; else window.open(url, '_blank');
       setStatus('idle');
-    } catch {
+    } catch (err) {
       tab?.close();
+      setErrorText(request.url.startsWith('/api/billing/invoice-original') && err instanceof Error ? err.message : null);
       setStatus('error');
-      setTimeout(() => setStatus('idle'), 2500);
+      setTimeout(() => setStatus('idle'), request.url.startsWith('/api/billing/invoice-original') ? 7000 : 2500);
     }
   };
   return (
     <button type="button" onClick={openPdf} disabled={status === 'loading'}
-      title={status === 'error' ? 'Could not open the PDF — click to retry'
+      title={status === 'error' ? (errorText ? `No original to open: ${errorText}` : 'Could not open the PDF — click to retry')
         : fallback ? `Opened as QuickBooks' own PDF, which shows accounting's split lines — the client's copy could not be drawn: ${fallback}`
         : (title ?? (clientView ? 'Click to open the invoice as the client receives it' : 'Click to open the PDF'))}
       style={{
@@ -117,7 +121,7 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         fontFamily: 'inherit',
       }}>
       {status === 'loading' && <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} />}
-      {company} #{displayInvoiceNo(invoiceNo ?? id ?? '')}
+      {company} #{displayInvoiceNo(invoiceNo ?? id ?? '')}{suffix ? ` · ${suffix}` : ''}
     </button>
   );
 }
