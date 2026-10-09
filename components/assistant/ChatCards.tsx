@@ -26,7 +26,7 @@ import type { DraftLike } from '@/lib/draft-helper-client';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import ExpandedBillingRow from '@/components/billing/ExpandedBillingRow';
 import type { CompanyBilling } from '@/app/api/billing/renewals/route';
-import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
+import { loadSoaActor, downloadSoaPdf, openSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
 import { buildCampaignDraft, loadCampaignActor, type CampaignActor, type CampaignSender } from '@/lib/campaign-draft-client';
 // type-only (lib/email-draft-lookup.ts is server-only)
 import type { EmailDraftPreview } from '@/lib/email-draft-lookup';
@@ -1033,6 +1033,23 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
             <button
               type="button"
               disabled={!!busy}
+              onClick={() => void run('view-ALL', async () => {
+                await openSoaPdf(preview.companyName, 'ALL');
+                logActivity('chat_soa_pdf_view', { companyName: preview.companyName, qbCompany: 'ALL', conversationId });
+              })}
+              title="Open the combined SOA in a new tab to look before downloading"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: '1px solid #cbd5e1', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: '#fff', color: '#31506f', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <ExternalLink size={12} />
+              {busy === 'view-ALL' ? '打开中…' : '查看'}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
               onClick={() => void run('pdf-ALL', async () => {
                 await downloadSoaPdf(preview.companyName, 'ALL');
                 logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: 'ALL', conversationId });
@@ -1084,6 +1101,23 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
             </div>
           )}
           <div style={{ display: 'flex', gap: 7 }}>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => void run(`view-${line.qbCompany}`, async () => {
+                await openSoaPdf(preview.companyName, line.qbCompany);
+                logActivity('chat_soa_pdf_view', { companyName: preview.companyName, qbCompany: line.qbCompany, conversationId });
+              })}
+              title="Open this SOA in a new tab to look before downloading"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: '1px solid #cbd5e1', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: '#fff', color: '#31506f', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <ExternalLink size={12} />
+              {busy === `view-${line.qbCompany}` ? '打开中…' : '查看'}
+            </button>
             <button
               type="button"
               disabled={!!busy}

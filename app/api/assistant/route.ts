@@ -244,7 +244,8 @@ export function claimsGenericCapabilityDenial(text: string): boolean {
 // be applied identically whether the final reply is Claude's own draft or
 // OpenAI's synthesis of it. See docs/INVARIANTS.md INV-AI-004.
 export function applyCapabilityGuards(text: string, opts: { toolNames: string[]; toolEvidence: { name: string; input: Record<string, unknown> }[]; account?: ApprovedAccount | null }): string {
-  const outstandingToolCalled = opts.toolNames.includes('check_outstanding_balance') || opts.toolNames.includes('outstanding_balance_summary');
+  // find_invoice_pdf returns each invoice's real status (Open / Paid), so "未付" in its reply is not an invented balance.
+  const outstandingToolCalled = opts.toolNames.includes('check_outstanding_balance') || opts.toolNames.includes('outstanding_balance_summary') || opts.toolNames.includes('find_invoice_pdf');
   const crossPersonToolCalled = opts.toolEvidence.some(e => (e.name === 'my_tasks_summary' || e.name === 'recent_activity_summary') && typeof e.input?.person === 'string' && (e.input.person as string).trim().length > 0);
   let out = text;
   let flagged = false;

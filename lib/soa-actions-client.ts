@@ -84,6 +84,28 @@ export async function downloadSoaPdf(companyName: string, qbCompany: SoaCompanyS
 }
 
 /**
+ * Open the merged SOA PDF in a NEW TAB to look at before downloading (the assistant's SOA card, Vincent 2026-10-09).
+ * The tab is opened synchronously on the click, before the await — otherwise Chrome blocks it as a popup.
+ */
+export async function openSoaPdf(companyName: string, qbCompany: SoaCompanySelector): Promise<void> {
+  const tab = window.open('', '_blank');
+  try {
+    const res = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${qbCompany}`);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error ?? 'Unable to generate the combined PDF.');
+    }
+    warnAboutSoaPdf(res, `SOA (${qbCompany}) for ${companyName}`);
+    const url = URL.createObjectURL(await res.blob());
+    if (tab) tab.location.href = url; else window.open(url, '_blank');
+    window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
+
+/**
  * Build the SOA client email draft, with the merged statement PDF already
  * attached. Returns the draft for OutlookStyleSendModal — it does NOT send.
  *
