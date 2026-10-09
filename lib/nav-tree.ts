@@ -64,7 +64,7 @@ export const NAV_TREE: NavNode[] = [
       { label: 'Late Filing', href: '/late-filing' },
       { label: 'Quotation', href: '/billing/quotation' },
       {
-        id: 'billing-drafts', label: 'Billing Drafts',
+        id: 'billing-drafts', label: 'Invoices',
         children: [
           { label: 'TAB / TAC', href: '/billing?tab=billing' },
           { label: 'TAO', href: '/billing/tao' },

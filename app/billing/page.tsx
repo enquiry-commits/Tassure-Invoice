@@ -1961,7 +1961,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
       {/* Table */}
       <div className="system-list-shell">
         <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
-          <span className="system-list-title">Billing Drafts</span>
+          <span className="system-list-title">Invoices</span>
           <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
         {/* minHeight keeps this from shrinking to just a few rows' worth of
@@ -3563,7 +3563,7 @@ function CombinedPage() {
           border: '1px solid #dbe3ec', boxShadow: '0 1px 3px rgba(15,35,60,.06)',
         }}>
           {([
-            { key: 'billing', label: 'Billing Drafts',  desc: 'Renewals & annual obligations' },
+            { key: 'billing', label: 'Invoices',  desc: 'Renewals & annual obligations' },
             { key: 'ar',      label: 'AR Reminder',      desc: 'Annual Return filing tracker'  },
           ] as const).map(({ key, label, desc }, i) => {
             const active = tab === key;
