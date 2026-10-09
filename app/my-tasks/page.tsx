@@ -342,7 +342,7 @@ function OriginalsExportReminder() {
   }, []);
   if (!status || !status.pending.length) return null;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#1e3a5f' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#1e3a5f' }}>
       <div style={{ flex: 1, lineHeight: 1.6 }}>
         <strong>Monthly task — export the original invoices of {status.month}.</strong>{' '}
         Still to do: {status.pending.join(', ')}{status.done.length ? ` (done: ${status.done.join(', ')})` : ''}. One ZIP per book; Chelsea files the PDFs on the file server.

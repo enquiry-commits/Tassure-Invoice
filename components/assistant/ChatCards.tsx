@@ -1634,7 +1634,7 @@ export function InvoicePdfCard({ preview, conversationId }: { preview: InvoicePd
                 </button>
               )}
             </div>
-            {notes[noteKey] && <div style={{ marginTop: 5, fontSize: 10.5, color: '#b45309', lineHeight: 1.5 }}>{notes[noteKey]}</div>}
+            {notes[noteKey] && <div style={{ marginTop: 5, fontSize: 10, color: '#b45309', lineHeight: 1.5 }}>{notes[noteKey]}</div>}
           </div>
         );
       })}

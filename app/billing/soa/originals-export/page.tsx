@@ -155,7 +155,7 @@ export default function OriginalsExportPage() {
           return (
             <div key={book} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>{book}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{book}</span>
                 <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{listing ? invoices.length : '…'}</span>
                 <span style={{ fontSize: 11, color: '#64748b' }}>invoices{voided ? ` (${voided} voided)` : ''}</span>
               </div>
@@ -165,7 +165,7 @@ export default function OriginalsExportPage() {
                   : 'Not exported yet for this month.'}
               </div>
               <button onClick={() => build(book)} disabled={busy || !invoices.length}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', border: 'none', background: NAVY, color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: busy || !invoices.length ? 'default' : 'pointer', opacity: busy || !invoices.length ? 0.55 : 1 }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', border: 'none', background: NAVY, color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700, cursor: busy || !invoices.length ? 'default' : 'pointer', opacity: busy || !invoices.length ? 0.55 : 1 }}>
                 {mine ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
                 {mine ? (mine.note ?? `Collecting ${mine.done} / ${mine.total}…`) : `Download ${book} ZIP`}
               </button>
