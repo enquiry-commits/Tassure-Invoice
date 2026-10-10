@@ -1,5 +1,6 @@
 import 'server-only';
 import { createAdminClient } from './supabase';
+import { ilikeAny } from './postgrest-or';
 import { isDeferredItem } from './deferred-pairing';
 import type { InvoicePdfItem, InvoicePdfPreview } from './invoice-pdf-card';
 
@@ -17,7 +18,7 @@ export async function findInvoicesForPdf(rawQuery: string): Promise<{ found: fal
   const sb = createAdminClient();
   const { data, error } = await sb.from('quickbooks_invoices')
     .select('qb_company, qb_invoice_id, invoice_no, txn_date, customer_name, total_amt, status')
-    .or(`invoice_no.ilike.%${q}%,customer_name.ilike.%${q}%`)
+    .or(ilikeAny(['invoice_no', 'customer_name'], q))
     .order('txn_date', { ascending: false })
     .limit(MAX_INVOICES + 1);
   if (error) return { found: false, message: `Could not search invoices: ${error.message}` };
