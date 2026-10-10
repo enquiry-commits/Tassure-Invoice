@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-10 (CHECKED, read-only: which companies the AR / Late Filing changes touch, and a search for dates that do not exist — Vincent: "其他地方对不存在的日期（如31/09）的处理，目前是哪家公司 / 这次的改动有哪些公司受到影响，哪些公司要注意").
+
+**Dates that do not exist.** No company has one: all nine columns of all 907 active companies' live TeamWork AGM/AR lists were read, 0 cells (31/09 was only my example). Master List text cells (staff-typed, not read by AR): CATERPY SINGAPORE (Strike Off) next AGM due "31/20/2020", UNIONFUTURE MARINE (Active Client) join date "24/0/2023", PAYBAR's remark "31/06/2017", eleven "00/01/1900" placeholders. The five nominee-director batches and the AR / Late Filing runs all succeeded, so no bad date reached them.
+
+**Companies touched or to watch** — the list is in `docs/CURRENT_STATE.md` ("Companies to watch…"): BEAUTY ASSET (September row restored by tonight's generate, ghost hidden once the plan is applied), MAPLE GROVE CAPITAL VCC (ghost #866), ORBITEZ (the only company where the exact-date Late Filing mirror differs from the old guess: it gets an AR row "June 2025" because TeamWork still lists a stale June 2025 AGM), nine rows whose date is 1-3 days off TeamWork because `companies.fye_day` is 28/30 (BYTESFORCE INTERNATIONAL, EASYBOOK (SG), FREEFLOW SOLUTIONS, FUN FLARE ENTERPRISES, GOLDHILL MEMORIAL CENTRE, LEENDEN BIOTECH DEVELOPMENT ONE, LEENDEN RESEARCH AND CONSULTING, NXDOOR MANAGEMENT, SFS CARE — the nightly row sync matches by exact date, so TeamWork's dates never reach them), seven companies with years-old open cycles, 21 Master List FYE cells that now win for AR, and the 27 FYE-May-2026 companies Late Filing will list from 1 Jan 2027. New read-only tool `scripts/ar-impact-scan.ts` (REG-057). Nothing in app behaviour changed in this step.
+
+Previous entry follows.
+
 Last updated: 2026-10-10 (CHANGED: Late Filing now uses the statutory dates (AGM = FYE + 6 months, AR = FYE + 7) and mirrors the overdue cycle into AR Reminder by its exact TeamWork FYE date — Vincent: "改成法定日期（AGM FYE+6，AR FYE+7）"; part of "全部做").
 
 **Impact first (read-only, `scripts/late-filing-impact.ts`, the real list).** Today 23 companies under both rules; 15 Nov 2026 the same; on 15 Jan 2027 the old rule lists 22 and the statutory rule 49 — 27 companies with FYE May 2026 (AGM due 30 Nov 2026) that the old rule would list only from 1 Mar 2027; by 15 Mar 2027 both lists are equal (50); nobody is ever dropped. So nothing changes on the page today.
