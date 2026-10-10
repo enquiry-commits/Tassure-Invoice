@@ -6128,10 +6128,22 @@ again.
   parsed); (b) Vincent — exception `ar_workflow / teamwork_leftover_cycle`, Chinese first, naming the event to delete
   and the one to leave alone; it clears itself once TeamWork is fixed. The Dashboard's Automation Health register
   is VINCENT-ONLY (his own 2026-09-11 rule, app/api/automation/health/route.ts answers 403 to everyone else): no
-  exception raised by any sync reaches staff — anything staff must see goes into a remark or a badge. KNOWN GAP
-  (pre-existing, found by the council, NOT fixed): the Late Filing mirror inserts AR rows WITHOUT a PIC, and My Tasks
-  matches by PIC, so those rows are on nobody's list — 18 of the 26 marker rows on 2026-10-10, ORBITEZ's real
-  overdue row #886 among them; fixing it needs Vincent's go-ahead.
+  exception raised by any sync reaches staff — anything staff must see goes into a remark or a badge. The gap the council found
+  in this area — mirror rows with NO PIC, so on nobody's My Tasks — is fixed in (8) below.
+  (8) THE MIRROR'S SECRETARY PIC (2026-10-10; Vincent: "这个可以做"). The Late Filing mirror inserted its AR rows with
+  NO PIC, and My Tasks lists a Late Filing item only for the PIC of the mirrored AR row (lib/my-tasks-data.ts), so those
+  rows were on nobody's list — 18 of the 26 marker rows on 2026-10-10 (ORBITEZ #886, INVENTA, LAVARA …), found by the
+  council. Now (`lib/late-filing-pic.ts`): both mirror inserts (the cycle mirror and the EOT insert) carry
+  `companySecretaryPic(company)` = `resolveTeamworkPic(sec_pic ?? pic)`, exactly what AR Generate gives a new row, and
+  the reconciliation pass fills the BLANK Secretary PIC of existing marker rows from the same value. Never: a PIC a
+  person typed (any non-blank text, raw ids included), a hidden row, a terminated company's row, a company TeamWork
+  gives no usable PIC, an ambiguous company (two with one UEN or name) — guarded UPDATE on a still-blank row, counted
+  only when exactly one row changed; more than 40 fills in one run ⇒ none, and exception `late_filing / pic_fill_blocked`
+  (Vincent). Acc / Tax PICs are not touched; the legacy loop (companies TeamWork no longer lists) gets no guessed PIC.
+  Dry run 2026-10-10: all 18 fillable — Jenny Lai 6 rows, Kah Ye Chin + Shi Ming Ang 4, Hoe Chyi Lim + Seng Xin Hoo 2,
+  Seng Xin Hoo 2 (ORBITEZ among them), Hoe Chyi Lim 2, Kah Ye Chin 1, Shi Ming Ang 1 — every name a current staff
+  member in lib/staff-directory.ts, so each person's My Tasks gains those Late Filing companies (a Resolved one stays hidden).
+  Guarded by `test-late-filing-pic.ts`.
   Guarded by `test-ar-fye-resolve.ts` (ORBITEZ's real raw TeamWork rows as the fixture, 13 negative shapes, the
   one-definition tripwire), `test-ar-cycle-plan.ts`, `test-ar-plan-apply.ts`. Read-only live checks:
   `scripts/ar-plan-dryrun.ts`, `scripts/ar-impact-scan.ts` (section 4b lists the leftovers),

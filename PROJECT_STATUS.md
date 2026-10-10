@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-10 (CHANGED: the AR rows the Late Filing sync mirrors now carry the company's TeamWork Secretary PIC, and the 18 blank ones are filled — Vincent: "这个可以做" (the council's finding: 18 of 26 marker rows were on nobody's My Tasks)).
+
+**Why.** My Tasks lists a Late Filing item only for the PIC of the mirrored AR row; the mirror inserted rows with no PIC at all, so ORBITEZ's real overdue row #886 and 17 others were invisible to every secretary.
+
+**What changed (INV-AR-021 (8), REG-057).** New pure `lib/late-filing-pic.ts` (`companySecretaryPic` = `resolveTeamworkPic(sec_pic ?? pic)` as AR Generate; `planMirrorPicFills`). `app/api/late-filing/sync/route.ts`: both mirror inserts carry the PIC; the reconciliation pass fills a BLANK Secretary PIC of marker rows (never a typed one, a hidden row, a terminated or ambiguous company, a company without a TeamWork PIC; guarded UPDATE verified to change exactly one row; more than 40 in one run ⇒ none + exception `pic_fill_blocked`). Run summary: `picFilled`, `picFillWouldFill`, `picFillSkipped`, `picFillBlocked`. Acc / Tax PICs untouched.
+
+**Verification.** `tsc` 0; `test-late-filing-pic.ts` ALL OK (incl. every name resolving to a current staff member). Real data, read-only dry run before the code: all 18 blank rows fillable (Jenny Lai 6, Kah Ye Chin + Shi Ming Ang 4, Hoe Chyi Lim + Seng Xin Hoo 2, Seng Xin Hoo 2 incl. ORBITEZ, Hoe Chyi Lim 2, Kah Ye Chin 1, Shi Ming Ang 1); none without a company, none without a TeamWork PIC. NOT exercised: the 21:00 UTC Late Filing run itself (needs TeamWork) — expect `picFilled: 18`. Visible effect to tell the team: each of those five secretaries' My Tasks gains the Late Filing companies above (a Resolved one stays hidden).
+
+Previous entry follows.
+
 Last updated: 2026-10-10 (CHANGED: a TeamWork cycle that cannot be real is ignored and a reminder is raised — ORBITEZ follows its latest cycle; Vincent: "ORBITEZ 就按照最新的跑，但是可以有一个提醒在系统". Reviewed first by a 4-seat council: Singapore company secretary, Skeptic, Pragmatist, Operator — 8 agents, 1.3M subagent tokens, 26 min).
 
 **The case.** ORBITEZ PTE. LTD. (FYE moved June → December in 2024) carries in TeamWork an AGM for FYE 30/06/2025 (due 30/12/2025, event 8033, NO AR event) inside its filed Dec 2024 → Dec 2025 year. It made Master List's Next AGM Due 2025-12-30, Late Filing "Overdue 284 days", the coverage check DATE_INCONSISTENT, and — with the exact-date Late Filing mirror shipped earlier today — tonight's 21:00 UTC run would have inserted an AR row "June 2025". Vincent's TeamWork table (his screenshot) has no June 2025 row at all; its last row shows that AGM's due date under "2026 - 31/12/2026".

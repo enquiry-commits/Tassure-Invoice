@@ -11,6 +11,7 @@ import {
   AR_SYSTEM_EXCLUDER, AR_SYSTEM_RESTORER, MAX_AUTO_EXCLUSIONS_PER_RUN, MAX_AUTO_RESTORES_PER_RUN,
 } from '@/lib/company-lifecycle';
 import { todaySGT } from '@/lib/date';
+import { companySecretaryPic, MAX_PIC_FILLS_PER_RUN, planMirrorPicFills } from '@/lib/late-filing-pic';
 import { assessFye, findLeftoverCycles, leftoverReminder, MAX_LEFTOVER_COMPANIES_PER_RUN, parseDmyStrict, parseTwCycles, type LeftoverCycle } from '@/lib/ar-fye-resolve';
 
 /**
@@ -59,6 +60,8 @@ type CompanyTarget = {
   company_name: string;
   internal_id: string;
   registration_no: string | null;
+  pic: string | null;
+  sec_pic: string | null;
 };
 
 type CompanyEvaluation = {
@@ -145,7 +148,7 @@ async function syncLateFiling(run: AutomationRun) {
     // NULL semantics; identical 904-company set, now on purpose.
     const { data: companies, error: companiesError } = await onlyTeamworkActiveCompanies(supabase
       .from('companies')
-      .select('id, company_name, internal_id, registration_no'))
+      .select('id, company_name, internal_id, registration_no, pic, sec_pic'))
       .not('internal_id', 'is', null);
     if (companiesError) throw new Error(`Unable to load active companies: ${companiesError.message}`);
 
@@ -154,6 +157,8 @@ async function syncLateFiling(run: AutomationRun) {
       company_name: company.company_name,
       internal_id: String(company.internal_id),
       registration_no: company.registration_no ?? null,
+      pic: company.pic ?? null,
+      sec_pic: company.sec_pic ?? null,
     }));
     const evaluations = await evaluateCompanies(targets, cookie, run, controller.signal);
 
@@ -443,6 +448,7 @@ async function syncLateFiling(run: AutomationRun) {
             due_date: toIsoDate(eotRevisedDue),
             [originalField]: toIsoDate(eotOriginalDue),
             [revisedField]: toIsoDate(eotRevisedDue),
+            pic: companySecretaryPic(c) || null,   // INV-AR-021 (8): a row with no PIC is on nobody's My Tasks
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
           });
@@ -597,6 +603,8 @@ async function syncLateFiling(run: AutomationRun) {
             fye_date: fyeDateIso,
             due_date: outstandingDue.toISOString().slice(0, 10),
             remarks: lateNote,
+            // INV-AR-021 (8): the company's TeamWork PIC (as AR Generate gives it). Without one the row is on nobody's My Tasks.
+            pic: companySecretaryPic(c) || null,
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
           }).select('id').single();
@@ -802,7 +810,7 @@ async function syncLateFiling(run: AutomationRun) {
     // (INV-AR-016) hid 14 live clients' AR cycles. Do not re-derive it here.
     const { data: allCompanies, error: allCompaniesError } = await supabase
       .from('companies')
-      .select('registration_no, company_name, tw_status');
+      .select('id, registration_no, company_name, tw_status, pic, sec_pic');
     // A failed read must never be mistaken for "no companies" — with an empty
     // index, the Master List fallback would decide for everyone.
     if (allCompaniesError) throw new Error(`Unable to load companies for the termination check: ${allCompaniesError.message}`);
@@ -820,9 +828,30 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: markedRows, error: markedError } = await supabase
       .from('ar_reminder')
-      .select('id, entity_name, uen, remarks')
+      .select('id, entity_name, uen, remarks, pic, status, company_id')
       .ilike('remarks', `%${LATE_FILING_MARKER}%`);
     if (markedError) noteWriteError('marked ar_reminder rows select', markedError.message);
+
+    // INV-AR-021 (8) — Vincent, 2026-10-10 ("这个可以做"): a marker row with a BLANK Secretary PIC is on nobody's My Tasks (it lists a
+    // Late Filing item only for the PIC of the mirrored AR row), so it gets the company's TeamWork PIC — the same value AR Generate
+    // gives a new row. Only a blank PIC is ever filled (never one a person typed), never a hidden row or a terminated company's, and
+    // if more than MAX_PIC_FILLS_PER_RUN rows would be filled NOTHING is (a bug or a mass change) and the run says so.
+    let picFilled = 0;
+    const picFillPlan = planMirrorPicFills(
+      markedRows ?? [],
+      (allCompanies ?? []).map(c => ({ id: c.id as number, company_name: c.company_name as string, registration_no: (c.registration_no as string | null) ?? null, pic: (c.pic as string | null) ?? null, sec_pic: (c.sec_pic as string | null) ?? null })),
+      (uen, name) => lifecycle.isTerminated(uen ? String(uen).trim().toUpperCase() : null, name),
+    );
+    for (const fill of picFillPlan.fills) {
+      if (controller.signal.aborted) throw abortError(controller.signal);
+      const base = supabase.from('ar_reminder')
+        .update({ pic: fill.pic, updated_by_email: 'system:late-filing', updated_by_name: 'Late Filing Sync (PIC filled from TeamWork)' })
+        .eq('id', fill.rowId);
+      // guarded to a row that is STILL blank (a person may have typed one since the read), and counted only when exactly one row changed
+      const { data: filled, error: fillError } = await (fill.had === 'null' ? base.is('pic', null) : base.eq('pic', '')).select('id');
+      if (fillError) noteWriteError(`marker row PIC fill (${fill.entity})`, fillError.message);
+      else if ((filled?.length ?? 0) === 1) picFilled++;
+    }
 
     if (markedRows?.length) {
       // Fresh query, not the byUen/byName maps built at the top of this
@@ -998,6 +1027,10 @@ async function syncLateFiling(run: AutomationRun) {
       replaceAutomationExceptions('late_filing', 'active_company_ar_all_hidden', activeWithAllArHidden.map(c => ({
         key: c.uen, name: c.name, details: { hidden_rows: c.hiddenRows },
       }))),
+      // INV-AR-021 (8): more blank-PIC marker rows than the limit would have been filled, so none was (a bug or a mass change).
+      replaceAutomationExceptions('late_filing', 'pic_fill_blocked', picFillPlan.blocked
+        ? [{ key: 'pic-fill', name: 'Late Filing PIC fill', details: { would_fill: picFillPlan.wouldFill, limit: MAX_PIC_FILLS_PER_RUN, message: `The Late Filing sync would have filled the Secretary PIC of ${picFillPlan.wouldFill} AR rows in one run (limit ${MAX_PIC_FILLS_PER_RUN}), so it filled NONE. Check lib/late-filing-pic.ts and the companies' PICs in TeamWork.` } }]
+        : []),
       // INV-AR-021 (7): the leftover-cycle rule matched too many companies for one run, so it ignored none (see leftoverTripped above).
       replaceAutomationExceptions('late_filing', 'leftover_rule_tripped', leftoverTripped
         ? [{ key: 'leftover-rule', name: 'Leftover TeamWork cycles', details: { companies: leftoverAll.size, limit: MAX_LEFTOVER_COMPANIES_PER_RUN, message: `The rule for TeamWork leftover cycles matched ${leftoverAll.size} companies in one run (limit ${MAX_LEFTOVER_COMPANIES_PER_RUN}), so tonight it ignored NONE of them. Check TeamWork for a mass data change, or the rule in lib/ar-fye-resolve.ts findLeftoverCycles.` } }]
@@ -1023,6 +1056,11 @@ async function syncLateFiling(run: AutomationRun) {
       // INV-AR-021 (7): companies whose leftover TeamWork cycle was ignored tonight (empty when the rule tripped).
       leftoverCycles: [...leftoverByCompany.entries()].map(([id, list]) => ({ companyId: id, fye: list.map(l => l.fyeIso) })),
       leftoverRuleTripped: leftoverTripped,
+      // INV-AR-021 (8): blank Secretary PICs of marker rows filled from TeamWork (so My Tasks can list them).
+      picFilled,
+      picFillWouldFill: picFillPlan.wouldFill,
+      picFillSkipped: picFillPlan.skipped.length,
+      picFillBlocked: picFillPlan.blocked,
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
