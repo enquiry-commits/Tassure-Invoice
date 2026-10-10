@@ -51,11 +51,20 @@ again.
   "due date" column directly (AGM rows show FYE+6mo, AR rows show FYE+7mo in
   TeamWork's own UI, causing off-by-one-month bugs if the wrong event is
   read first). *(source: 2026-08-12 AR generation chain.)*
-- **INV-TW-006** — Statutory AGM due date = **FYE + 9 months** (SG
-  private-company rule) — used when deriving a Late-Filing-flagged company's
-  outstanding cycle from TeamWork's FYE month + AGM due date. Compare month
-  *numbers*, not calendar-date subtraction, to avoid overflow edge cases.
-  *(source: `app/api/late-filing/sync/route.ts`.)*
+- **INV-TW-006** — ~~Statutory AGM due date = FYE + 9 months (SG
+  private-company rule), used when deriving a Late-Filing-flagged company's
+  outstanding cycle from TeamWork's FYE month + AGM due date.~~ **SUPERSEDED
+  2026-10-10 (INV-AR-021, Vincent: "改成法定日期（AGM FYE+6，AR FYE+7）").** The
+  statutory dates are AGM = FYE + 6 months (Companies Act s175) and annual
+  return = FYE + 7 months (s197) — TeamWork shows the same
+  (`STATUTORY_AGM_MONTHS` / `STATUTORY_AR_MONTHS` in `lib/ar-fye-resolve.ts`).
+  The Late Filing page's "Next AGM Due" and its "overdue" filter use FYE + 6
+  (month-end clamped: 31 Aug → 28 Feb); the sync no longer derives a cycle from
+  "FYE = 9 months before the due date" — it mirrors the cycle by the exact FYE
+  date TeamWork shows for it (INV-AR-021 (6)). The nightly detector's own
+  threshold (a company is flagged when MORE than 90 days past TeamWork's due
+  date) is unchanged.
+  *(source: `app/api/late-filing/route.ts`, `app/api/late-filing/sync/route.ts`.)*
 - **INV-TW-007** — "Next AGM Due Date" must use a two-pass approach: find
   the latest genuinely-completed cycle's FYE first, then only consider
   unheld cycles **after** it — otherwise an old cycle's blank Held/Filing
@@ -6077,5 +6086,20 @@ again.
   the 4th and 5th reviewed AR-hiding paths (INV-AR-017 tripwire in
   `test-company-lifecycle.ts`): the system's own FYE-exclusion actor (restorable),
   breakers, guarded updates, the INV-AR-017 safety net still applies.
+  (6) LATE FILING (2026-10-10): the page's "Next AGM Due" and "overdue" filter
+  use the statutory FYE + 6 (INV-TW-006 superseded). Impact, measured on the real
+  list with `scripts/late-filing-impact.ts`: today and on 15 Nov NOTHING changes
+  (23 companies either way); on 15 Jan 2027, 27 companies with FYE May 2026 (AGM
+  due 30 Nov 2026) are listed that the old rule would show only from 1 Mar 2027;
+  nobody is dropped. Two things deliberately NOT changed: the list still ignores
+  cycles whose FYE year is the CURRENT calendar year (`y.year >= thisYear`), so a
+  May-2026 company that fell overdue on 1 Dec 2026 appears only on 1 Jan 2027; and
+  the nightly detector still flags a company only when it is MORE than 90 days past
+  TeamWork's due date. The sync's mirror into AR Reminder now takes the overdue
+  cycle's EXACT FYE date from TeamWork and the page's FYE month from `assessFye`
+  (before: the company's latest FYE month + "9 months before the due date", which
+  produced ghosts #866 June 2021 and #867 October 2025). A mirrored row carries
+  TeamWork's own date, so the nightly plan (3) never calls it a ghost.
   Guarded by `test-ar-fye-resolve.ts`, `test-ar-cycle-plan.ts`,
-  `test-ar-plan-apply.ts`. Read-only live check: `scripts/ar-plan-dryrun.ts`.
+  `test-ar-plan-apply.ts`. Read-only live checks: `scripts/ar-plan-dryrun.ts`,
+  `scripts/late-filing-impact.ts`.

@@ -18,6 +18,14 @@ const ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OC
 /** A keying slip is a date within this many days of an anniversary of an earlier cycle, but in the next/previous month. */
 export const SLIP_TOLERANCE_DAYS = 3;
 
+/**
+ * Statutory due dates of a private company, counted from its financial year end: the AGM within 6 months (Companies Act s175), the
+ * annual return within 7 (s197). TeamWork shows the same dates (BEAUTY ASSET: FYE 30 Sep 2026 -> AGM 30 Mar 2027, AR 30 Apr 2027).
+ * Vincent, 2026-10-10: Late Filing follows these, not the old FYE + 9 months (INV-TW-006, superseded by INV-AR-021).
+ */
+export const STATUTORY_AGM_MONTHS = 6;
+export const STATUTORY_AR_MONTHS = 7;
+
 // ── dates (strict: a calendar date that does not exist is NOT a date) ────────────────────────────────────────────────
 const daysIn = (y: number, m1: number) => new Date(Date.UTC(y, m1, 0)).getUTCDate();
 const pad = (n: number) => String(n).padStart(2, '0');

@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-10 (CHANGED: Late Filing now uses the statutory dates (AGM = FYE + 6 months, AR = FYE + 7) and mirrors the overdue cycle into AR Reminder by its exact TeamWork FYE date — Vincent: "改成法定日期（AGM FYE+6，AR FYE+7）"; part of "全部做").
+
+**Impact first (read-only, `scripts/late-filing-impact.ts`, the real list).** Today 23 companies under both rules; 15 Nov 2026 the same; on 15 Jan 2027 the old rule lists 22 and the statutory rule 49 — 27 companies with FYE May 2026 (AGM due 30 Nov 2026) that the old rule would list only from 1 Mar 2027; by 15 Mar 2027 both lists are equal (50); nobody is ever dropped. So nothing changes on the page today.
+
+**What changed.** `app/api/late-filing/route.ts`: `nextAgmDue` = FYE + `STATUTORY_AGM_MONTHS` (6, month-end clamped: 31 Aug → 28 Feb; `lib/ar-fye-resolve.ts` also has `STATUTORY_AR_MONTHS` = 7); `getLateFilingList` takes two evaluation-only options (`agmMonths`, `asOf`). `app/api/late-filing/sync/route.ts`: the AR mirror takes the overdue cycle's EXACT FYE date from TeamWork (`earliestOverdueFyeIso`, read strictly; an unreadable cell is not mirrored) instead of guessing "FYE = 9 months before the due date" from the company's LATEST FYE month — that guess is what made ghosts #866 (June 2021) and #867 (October 2025); the page's FYE month comes from `assessFye` (the keying-slip gate). INV-TW-006 is marked superseded; INV-AR-021 (6) and REG-057 record the impact and the checks. Because a mirrored row now carries TeamWork's own date, the nightly AR plan never calls it a ghost. NOT changed on purpose (Vincent's call if he wants them): the list still ignores cycles whose FYE year is the current calendar year, and the nightly detector still flags only companies more than 90 days past TeamWork's due date.
+
+**Verification.** `tsc` 0; `test-ar-fye-resolve.ts` ALL OK (statutory dates pinned against TeamWork's BEAUTY dates, exact-cycle mirror and gated month pinned by source checks). The sync itself needs TeamWork and was not run here — its first nightly run is the real test: expect no new ar_reminder rows labelled with a month other than the cycle's own.
+
+Previous entry follows.
+
 Last updated: 2026-10-10 (NEW, SHADOW: AR Reminder now follows the FYE month staff typed in Master List, refuses keying-slip dates, and computes its rows from the CURRENT state every night — Vincent: "全部做 … 我要的是根除和完全自动化"; "员工特地在系统内改 FYE，AR 就应该优先以系统的 FYE 作为判断，TW 不同就在 Master List 提醒").
 
 **Why.** The BEAUTY ASSET incident (entry below) showed the real weakness: AR rows were only corrected at the moment `fye_month` changed, so one wrong night survived every later right night, and a single mistyped TeamWork date (01/10/2027 for 30/09/2027) was enough to start it. Vincent approved the full rebuild and added the Master List rule: TeamWork is the first line, but a month staff DELIBERATELY typed in Master List wins for AR (they may have to change the system before TeamWork), differences are recorded and flagged, and "只算员工特地改过的" — a value nobody edited here, or automation wrote, still follows TeamWork.

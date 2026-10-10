@@ -11,6 +11,7 @@ import {
   AR_SYSTEM_EXCLUDER, AR_SYSTEM_RESTORER, MAX_AUTO_EXCLUSIONS_PER_RUN, MAX_AUTO_RESTORES_PER_RUN,
 } from '@/lib/company-lifecycle';
 import { todaySGT } from '@/lib/date';
+import { assessFye, parseDmyStrict, parseTwCycles } from '@/lib/ar-fye-resolve';
 
 /**
  * Detects late filers from TeamWork's per-company AGM/AR history.
@@ -282,12 +283,16 @@ async function syncLateFiling(run: AutomationRun) {
       // inconsistency directly: "这个FYE的逻辑是否有按照之前设置ACTIVE
       // CLIENT的逻辑一致"). Now genuinely compares ISO dates and keeps the
       // highest one, same as that route.
+      // INV-AR-021 (2026-10-10): the month is now decided by lib/ar-fye-resolve.ts's assessFye — the same single definition AR
+      // Reminder uses — so a keying slip in TeamWork (BEAUTY ASSET: 01/10/2027 for 30/09/2027) cannot make this page, or the
+      // AR row it mirrors, say October.
       let latestFyeMonth: string | null = null;
-      let latestFyeIso: string | null = null;
       let lastAgmHeld: Date | null = null;
       let lastArFiled: Date | null = null;
       let earliestOutstandingDue: Date | null = null;
       let earliestOverdueDue: Date | null = null;
+      // The EXACT FYE date of the cycle that earliestOverdueDue belongs to (strictly read; null when TeamWork's cell is unreadable).
+      let earliestOverdueFyeIso: string | null = null;
       let newestAgmDue: Date | null = null;
 
       // Pass 1: latest FYE month/cycle stats, plus the FYE of the most
@@ -306,16 +311,14 @@ async function syncLateFiling(run: AutomationRun) {
         const completionDate = filingDate || heldDate;
         const fyeDate = parseDmy(fyeDateRaw);
         const fyeIso = fyeDate ? toIsoDate(fyeDate) : null;
-        if (fyeDate && fyeIso && (!latestFyeIso || fyeIso > latestFyeIso)) {
-          latestFyeIso = fyeIso;
-          latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
-        }
         if (completionDate && fyeIso && (!latestCompletionFyeIso || fyeIso > latestCompletionFyeIso)) {
           latestCompletionFyeIso = fyeIso;
         }
         if (event === 'AGM' && heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
         if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) lastArFiled = filingDate;
       }
+      const monthAssessment = assessFye(parseTwCycles(rows).cycles);
+      latestFyeMonth = monthAssessment.month ? MONTH_ABBR[FULL_MONTH_NAMES.indexOf(monthAssessment.month)] : null;
 
       // Pass 2: outstanding/overdue detection. TeamWork's own historical
       // data sometimes leaves an OLD row's Held/Filing Date blank even
@@ -351,7 +354,7 @@ async function syncLateFiling(run: AutomationRun) {
           if (dueDate < today) {
             const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86_400_000);
             if (overdueDays > currentOverdueDays) currentOverdueDays = overdueDays;
-            if (!earliestOverdueDue || dueDate < earliestOverdueDue) earliestOverdueDue = dueDate;
+            if (!earliestOverdueDue || dueDate < earliestOverdueDue) { earliestOverdueDue = dueDate; earliestOverdueFyeIso = parseDmyStrict(fyeDateRaw); }
           }
         }
       }
@@ -513,19 +516,14 @@ async function syncLateFiling(run: AutomationRun) {
       // forward, independent of re-deriving cycle/date logic that stops
       // making sense once the company is later resolved.
       let mirroredArReminderId: number | null = null;
-      if (outstandingDue && latestFyeMonth) {
-        const fyeMonthIdx0 = MONTH_ABBR.indexOf(latestFyeMonth);
-        const dueYear = outstandingDue.getFullYear();
-        const dueMonthIdx0 = outstandingDue.getMonth();
-        // AGM due = FYE + 9 months (SG private co. rule — same relationship
-        // /api/late-filing/route.ts's nextAgmDue() encodes going forward).
-        // Going backward, if the FYE month number is greater than the due
-        // month number, the FYE fell in the calendar year before the due
-        // date's year; otherwise same year. Exact for any ~9-month gap, and
-        // avoids Date month-arithmetic overflow edge cases entirely.
-        const fyeYear = dueYear - (fyeMonthIdx0 > dueMonthIdx0 ? 1 : 0);
-        const fyeMonthFull = FULL_MONTH_NAMES[fyeMonthIdx0];
-        const fyeDateIso = new Date(fyeYear, fyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
+      // INV-AR-021 (2026-10-10): the mirrored row is the cycle's OWN, by its exact FYE date as TeamWork shows it. This used to guess
+      // the cycle from the company's LATEST FYE month and the due date ("FYE = 9 months before the due date"), which labelled the
+      // row with the wrong month whenever the outstanding cycle's month was not the latest one — BEAUTY ASSET's "October 2025" (#867)
+      // and MAPLE GROVE's "June 2021" (#866) are such rows. A cycle whose FYE cell is unreadable is not mirrored.
+      if (outstandingDue && earliestOverdueFyeIso) {
+        const fyeYear = Number(earliestOverdueFyeIso.slice(0, 4));
+        const fyeMonthFull = FULL_MONTH_NAMES[Number(earliestOverdueFyeIso.slice(5, 7)) - 1];
+        const fyeDateIso = earliestOverdueFyeIso;
         // Describe THIS cycle's actual overdue days, not `reasons` — that
         // array only lists whichever conditions crossed the 90-day bar
         // that flags the company on the Late Filing page, so a company

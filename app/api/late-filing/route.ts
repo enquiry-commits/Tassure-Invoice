@@ -4,6 +4,8 @@ import { todaySGT, thisYearSGT } from '@/lib/date';
 import { normalize } from '@/lib/company-name';
 import { getRequestAccount } from '@/lib/request-account';
 import { isActiveCompany } from '@/lib/company-lifecycle';
+import { addMonthsClamped } from '@/lib/ar-coverage';
+import { STATUTORY_AGM_MONTHS } from '@/lib/ar-fye-resolve';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const MONTH_IDX: Record<string, number> = {
@@ -15,11 +17,13 @@ function fyeToDate(month: string, year: number): string {
   const lastDay = new Date(year, m, 0).getDate();
   return `${year}-${String(m).padStart(2,'0')}-${lastDay}`;
 }
-// Next AGM due = 9 months after FYE (private company rule in SG)
-function nextAgmDue(fyeDate: string): string {
-  const d = new Date(fyeDate);
-  d.setMonth(d.getMonth() + 9);
-  return d.toISOString().slice(0,10);
+// Statutory dates (Vincent, 2026-10-10: "改成法定日期（AGM FYE+6，AR FYE+7）"): a private company's AGM is due 6 months after its
+// financial year end (Companies Act s175) and its annual return 7 months after (s197) — TeamWork shows the same dates. This used to
+// be FYE + 9 months ("private company rule in SG", INV-TW-006), which kept a company off this list for up to 3 months after it was
+// legally overdue. Superseded: INV-TW-006 -> INV-AR-021. (The months live in lib/ar-fye-resolve.ts so a test can pin them; a route
+// module should export handlers only.)
+function nextAgmDue(fyeDate: string, months: number = STATUTORY_AGM_MONTHS): string {
+  return addMonthsClamped(fyeDate, months);   // month-end clamped: 31 Aug + 6 months = 28 Feb, never 3 Mar
 }
 
 // Fields late-filing/sync also writes — a manual edit here must win from
@@ -117,10 +121,11 @@ export async function GET(req: NextRequest) {
 // computeAllCompanyBilling in app/api/billing/renewals/route.ts. Verbatim
 // body, mechanically extracted (not retyped) from what was previously
 // inlined directly in GET() above.
-export async function getLateFilingList(): Promise<LateRow[]> {
+// opts is for read-only evaluation scripts (scripts/late-filing-impact.ts): the AGM months to apply, and the date to pretend it is.
+export async function getLateFilingList(opts: { agmMonths?: number; asOf?: string } = {}): Promise<LateRow[]> {
   const sb  = createAdminClient();
-  const today = todaySGT();
-  const thisYear = thisYearSGT();
+  const today = opts.asOf ?? todaySGT();
+  const thisYear = opts.asOf ? Number(opts.asOf.slice(0, 4)) : thisYearSGT();
 
   // 1. All ar_reminder records — group by entity_name
   // Vincent, 2026-08-24: this never respected status='Excluded' — every
@@ -274,7 +279,7 @@ export async function getLateFilingList(): Promise<LateRow[]> {
 
     // Next AGM due for the OUTSTANDING year
     const fyeDate       = fyeToDate(fyeMonth, lateFy.year);
-    const nextAgm       = nextAgmDue(fyeDate);
+    const nextAgm       = nextAgmDue(fyeDate, opts.agmMonths);
 
     detected.push({
       id:                      entityName,

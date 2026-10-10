@@ -1,8 +1,9 @@
 // Run: npx tsx test-ar-fye-resolve.ts — which FYE month AR follows (lib/ar-fye-resolve.ts, INV-AR-021).
 import { readFileSync } from 'node:fs';
+import { addMonthsClamped } from './lib/ar-coverage';
 import {
   addYearsIso, allDmyStrict, assessFye, fyeMonthName, isMonthEndIso, isPersonActor, manualFyeFromMaster, parseDmyStrict, parseLatestDmyStrict,
-  parseTwCycles, resolveEffectiveFye, type TwCycle,
+  parseTwCycles, resolveEffectiveFye, STATUTORY_AGM_MONTHS, STATUTORY_AR_MONTHS, type TwCycle,
 } from './lib/ar-fye-resolve';
 
 let failed = 0;
@@ -94,6 +95,16 @@ for (const [name, list] of by) {
   if (g.month && g.month !== ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(latestMonth) - 1]) { changedByGate++; names.push(name); }
 }
 check('the gate overrules the old "latest FYE wins" rule for exactly ONE of 784 companies — BEAUTY ASSET', changedByGate === 1 && names[0] === 'BEAUTY ASSET PTE LTD', { changedByGate, names });
+
+console.log('\n--- Late Filing follows the statutory dates (AGM FYE + 6, AR FYE + 7), INV-TW-006 superseded ---');
+check('the statutory months are 6 and 7', STATUTORY_AGM_MONTHS === 6 && STATUTORY_AR_MONTHS === 7);
+check('BEAUTY ASSET: FYE 30 Sep 2026 -> AGM 30 Mar 2027, AR 30 Apr 2027 — exactly what TeamWork shows', addMonthsClamped('2026-09-30', STATUTORY_AGM_MONTHS) === '2027-03-30' && addMonthsClamped('2026-09-30', STATUTORY_AR_MONTHS) === '2027-04-30');
+check('a 31 Aug FYE is clamped to 28 Feb, never rolled to 3 Mar', addMonthsClamped('2026-08-31', STATUTORY_AGM_MONTHS) === '2027-02-28');
+const lfRoute = readFileSync('app/api/late-filing/route.ts', 'utf8');
+const lfSync = readFileSync('app/api/late-filing/sync/route.ts', 'utf8');
+check('the Late Filing list uses the statutory months and no longer adds 9', /STATUTORY_AGM_MONTHS/.test(lfRoute) && !/getMonth\(\)\s*\+\s*9/.test(lfRoute));
+check('the Late Filing sync mirrors the cycle by its EXACT FYE date, not by guessing from the latest month', /earliestOverdueFyeIso = parseDmyStrict\(fyeDateRaw\)/.test(lfSync) && /if \(outstandingDue && earliestOverdueFyeIso\)/.test(lfSync) && (lfSync.match(/fyeMonthIdx0 > dueMonthIdx0/g) ?? []).length === 1);
+check('...and takes its FYE month from assessFye (no private "latest FYE date wins")', /assessFye\(parseTwCycles\(rows\)\.cycles\)/.test(lfSync) && !/latestFyeIso/.test(lfSync));
 
 if (failed) { console.log(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nALL OK');
