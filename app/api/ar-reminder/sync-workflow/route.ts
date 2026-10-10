@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { restoreFyeExcludedRows, newRestoreBudget, type Slot } from '@/lib/ar-fye-restore';
 import { parseDmy, parseLatestDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { withAutomationRun } from '@/lib/automation-sync';
@@ -308,6 +309,7 @@ async function syncArWorkflow(req: NextRequest) {
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   let staleArRowsExcluded = 0, staleArRowsErrors = 0;
   let fyeCorrectionBackfilled = 0, fyeCorrectionBackfillErrors = 0;
+  const restoreBudget = newRestoreBudget(); // INV-AR-019: ONE circuit-breaker budget for the whole run (this loop calls once per company)
   const changes: { entity: string; patch: Record<string, string | null> }[] = [];
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
@@ -577,7 +579,19 @@ async function syncArWorkflow(req: NextRequest) {
                   if (!fullCompany) {
                     fyeCorrectionBackfillErrors++;
                   } else {
-                    const { error: backfillErr } = await supabase.from('ar_reminder').insert({
+                    // The FYE just came BACK to this month: the system's own earlier exclusion may hold this exact
+                    // slot (the unique key) — restore it instead of failing the insert (INV-AR-019). A person's
+                    // exclusion is never overridden; it counts as an error here and is reported by the nightly run.
+                    const slot: Slot = { entity_name: fullCompany.company_name as string, fye_month: correctMonth as string, fye_year: Number(openYearLabel), fye_date: openFyeIso, company_id: companyInfo.id };
+                    let restoredHere: Awaited<ReturnType<typeof restoreFyeExcludedRows>> | null = null;
+                    try {
+                      restoredHere = await restoreFyeExcludedRows(supabase, [slot], restoreBudget);
+                    } catch {
+                      fyeCorrectionBackfillErrors++; // fail open: fall through to the plain insert below, exactly as before
+                    }
+                    const backfillErr = restoredHere && restoredHere.handled.size
+                      ? (restoredHere.failed.length || restoredHere.blocked.length ? { message: 'slot held by an Excluded row that was not restored' } : null)
+                      : (await supabase.from('ar_reminder').insert({
                       entity_name: fullCompany.company_name,
                       company_id: companyInfo.id,
                       uen: fullCompany.registration_no || '',
@@ -591,7 +605,7 @@ async function syncArWorkflow(req: NextRequest) {
                       acc_pic_manual: false,
                       tax_pic_manual: false,
                       status: 'Pending',
-                    });
+                    })).error;
                     if (backfillErr) fyeCorrectionBackfillErrors++;
                     else fyeCorrectionBackfilled++;
                   }

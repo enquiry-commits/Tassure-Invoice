@@ -6,6 +6,7 @@ import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation
 import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
 import { toDateStr, addMonths } from '@/lib/date';
 import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
+import { restoreFyeExcludedRows, newRestoreBudget, slotKey, type Slot } from '@/lib/ar-fye-restore';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -173,6 +174,7 @@ async function generateArRows() {
         };
       });
 
+    let insertedNow = 0;
     if (toInsert.length) {
       // Vincent, 2026-08-28: this route has failed EVERY day for at least a
       // week straight with "duplicate key value violates unique constraint
@@ -192,17 +194,20 @@ async function generateArRows() {
       // route's own stated intent ("never overwrites existing rows") more
       // precisely than a failing insert did, and stops one collision from
       // costing every other legitimate row in the run.
-      const { error: insErr } = await supabase.from('ar_reminder')
-        .upsert(toInsert, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true });
+      const { data: insertedRows, error: insErr } = await supabase.from('ar_reminder')
+        .upsert(toInsert, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true }).select('id');
       if (insErr) {
         errors.push(`${target.monthName} ${target.year}: ${insErr.message}`);
         summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: 0, error: insErr.message });
         continue;
       }
+      insertedNow = insertedRows?.length ?? 0;
     }
 
-    summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: toInsert.length });
-    totalInserted += toInsert.length;
+    // Count what was REALLY inserted: ignoreDuplicates silently drops a row that collides with an existing one (an
+    // Excluded one included), and the old toInsert.length reported those as inserted (INV-AR-019).
+    summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: insertedNow, ...(insertedNow < toInsert.length ? { swallowed: toInsert.length - insertedNow } : {}) });
+    totalInserted += insertedNow;
   }
 
   // Catch-up pass: the loop above only ever looks forward from "today," so a
@@ -237,6 +242,9 @@ async function generateArRows() {
   // guessing at a fabricated cycle.
   const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
   let catchUpInserted = 0;
+  let catchUpRestored = 0; // rows the system hid for an FYE correction, brought back (INV-AR-019)
+  const catchUpBlocked: { id: number; entity_name: string; fye_month: string; fye_year: number; excluded_by: string | null; reason: string }[] = [];
+  const restoreBudget = newRestoreBudget(); // ONE circuit-breaker budget for the whole run
   let catchUpSkipped = 0;
   let catchUpLinked = 0;
   let catchUpDeadlineHit = false;
@@ -409,13 +417,52 @@ async function generateArRows() {
           await Promise.all(Array.from({ length: Math.min(CATCH_UP_CONCURRENCY, catchUpTargets.length) }, worker));
           catchUpDeadlineHit = catchUpController.signal.aborted;
           if (catchUpRows.length) {
+            // A row the SYSTEM hid for an FYE correction (Sep→Oct→Sep) holds the very slot this run wants (unique key
+            // entity_name+fye_month+fye_year): restore it instead of inserting into it. A person's exclusion, or a
+            // filed row, is never touched — it is reported below (INV-AR-019, BEAUTY ASSET PTE LTD 2026-10-09).
+            let fixed: Awaited<ReturnType<typeof restoreFyeExcludedRows>> | null = null;
+            try {
+              fixed = await restoreFyeExcludedRows(supabase, catchUpRows as Slot[], restoreBudget);
+            } catch (e) {
+              // fail open: a problem in this check must not cost tonight's genuinely new rows — the plain insert below still runs
+              catchUpErrors.push(`FYE restore check failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+            if (fixed) {
+              catchUpRestored = fixed.restored.length;
+              for (const b of fixed.blocked) {
+                catchUpBlocked.push({ id: b.row.id, entity_name: b.row.entity_name, fye_month: b.row.fye_month, fye_year: b.row.fye_year, excluded_by: b.last?.by ?? null, reason: b.restore ? 'restore-failed' : b.reason });
+              }
+              for (const f of fixed.failed) {
+                catchUpBlocked.push({ id: f.verdict.row.id, entity_name: f.verdict.row.entity_name, fye_month: f.verdict.row.fye_month, fye_year: f.verdict.row.fye_year, excluded_by: f.verdict.last?.by ?? null, reason: 'restore-failed' });
+                catchUpErrors.push(`FYE restore failed (ar_reminder ${f.verdict.row.id}): ${f.error}`);
+              }
+            }
+            const handled = fixed?.handled ?? new Set<string>();
+            const toInsert = catchUpRows.filter(r => !handled.has(slotKey(r as Slot)));
             // Same reasoning as the main loop's own insert above: upsert
             // with ignoreDuplicates so a stray collision here can't cost
-            // every other genuinely-new catch-up row in the same run.
-            const { error: catchUpInsErr } = await supabase.from('ar_reminder')
-              .upsert(catchUpRows, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true });
-            if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
-            else catchUpInserted = catchUpRows.length;
+            // every other genuinely-new catch-up row in the same run. `.select()` returns only the rows really
+            // inserted — the old `catchUpRows.length` reported collisions swallowed by the unique key as inserted.
+            if (toInsert.length) {
+              const { data: insertedRows, error: catchUpInsErr } = await supabase.from('ar_reminder')
+                .upsert(toInsert, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true }).select('id');
+              if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
+              else catchUpInserted = insertedRows?.length ?? 0;
+            }
+          }
+          // Wanted but held by a row that was NOT restored (a person hid it, it was filed, its date differs, no audit
+          // trail, the breaker stopped, or the restore failed): the company is invisible in AR Reminder — say so on the
+          // Automation Health dashboard instead of letting the nightly run look healthy. Resolved ONLY when this pass ran
+          // to the end: a run cut short by its deadline has not seen every company, so it must not close open ones.
+          if (!catchUpDeadlineHit) {
+            await replaceAutomationExceptions('ar_generate', 'catch_up_blocked_by_excluded', catchUpBlocked.map(b => ({
+              key: `${b.id}`,
+              name: b.entity_name,
+              details: {
+                ar_reminder_id: b.id, fye_month: b.fye_month, fye_year: b.fye_year, excluded_by: b.excluded_by, reason: b.reason,
+                message: `This company needs a row for this FYE cycle, but ar_reminder #${b.id} already holds the slot as Excluded and was NOT restored automatically (${b.reason}). Check TeamWork; restore it in AR Reminder if it should be back.`,
+              },
+            })));
           }
           // Surface skipped companies on the automation health dashboard
           // instead of them silently vanishing — a company with no live row
@@ -423,7 +470,8 @@ async function generateArRows() {
           // itself (same "flag, don't guess" pattern as teamwork_nd's
           // missing_nominee_subrole). Auto-resolves once the company either
           // gets a real open cycle in TeamWork or otherwise gets a live row.
-          await replaceAutomationExceptions('ar_generate', 'catch_up_no_open_cycle', skippedCompanies.map(c => ({
+          // (a run cut short by its deadline has not seen every company: it must not close open exceptions)
+          if (!catchUpDeadlineHit) await replaceAutomationExceptions('ar_generate', 'catch_up_no_open_cycle', skippedCompanies.map(c => ({
             key: String(c.id),
             name: c.company_name,
             details: {
@@ -443,7 +491,7 @@ async function generateArRows() {
   totalInserted += catchUpInserted;
   errors.push(...catchUpErrors);
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, catchUpLinked, catchUpDeadlineHit, summary, errors };
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpRestored, catchUpBlocked: catchUpBlocked.length, catchUpSkipped, catchUpLinked, catchUpDeadlineHit, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 

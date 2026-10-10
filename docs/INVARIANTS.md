@@ -5944,3 +5944,68 @@ again.
   — Vincent and Chelsea only; the page list (TCS FINANCE) and the flag must both
   allow it, so Esther (same department) does not see it. The originals API
   routes already check the page rule, so they follow.
+
+- **INV-AR-019** — A row the SYSTEM hid for an FYE correction comes back when
+  the FYE returns, and one bad TeamWork date must not be able to hide rows
+  unnoticed (BEAUTY ASSET PTE LTD, 2026-10-09; Chelsea: "9月的漏掉一间").
+  VERIFIED chain (UTC): TeamWork's own data carried a FY2027 cycle for this
+  company with FYE 01/10/2027 (the 17 Jun snapshot data/annual_returns.json:
+  the only non-month-end FYE among 1,656 events; its AGM due 2028-04-01 is
+  exactly what Master List later received as next_agm_due_date). sync-workflow
+  takes the month of the LATEST FYE date of all events as the company's FYE
+  month with no sanity check (sync-workflow.ts ~450-460), so
+  `companies#1705.fye_month` was written September→October four times by
+  `system:teamwork-agm-history` (5 Aug 07:03 — five minutes after commit 17f341d
+  introduced the self-correction — 5 Aug 20:37, 6 Aug 12:00, 6 Aug 14:18; an
+  unlogged writer, the bulk teamwork/sync, put September back in between until
+  c96cf49 on 6 Aug) and back on 18 Aug 20:56 once TeamWork's entry was
+  corrected. Each time the correction hid the old month's still-pending rows
+  with no circuit breaker and no confirmation (`September 2026` #714 on 11 Aug
+  by the one-time backfill; `October 2025` #867 and `October 2026` #914 on 18
+  Aug). When the FYE returned nothing restored #714: the catch-up's
+  `ignoreDuplicates` upsert (INV-AR-002) and the correction's own insert both
+  hit the unique key held by that Excluded row, silently, while the run counted
+  the row as inserted (INV-AR-020). AR follows `companies.fye_month`, derived
+  from TeamWork's AGM/AR event history (INV-TW-002) — NOT Master List's FYE
+  column (manual: Vincent set it SEP→OCT on 5 Aug 07:53, Lim Hoe Chyi set it
+  back on 19 Aug 03:34). `parseDmy` also rolls impossible dates over
+  (31/09/2026 → 2026-10-01, 31/06 → 01/07, 29/02/2027 → 01/03) and returns an
+  Invalid Date for 32/01/2026 that makes `toIsoDate` throw — a mistyped
+  TeamWork date can manufacture the same anomaly (known defect, deliberately NOT
+  changed: a strict parser needs a report-and-skip design, see CURRENT_STATE).
+  Rule (`lib/ar-fye-restore.ts`): in the catch-up AND in the FYE-correction
+  backfill, an Excluded row holding the wanted slot is RESTORED only when (a)
+  the LATEST transition to Excluded in `ar_reminder_audit` was made by
+  `system:teamwork` with the name `TeamWork Sync (FYE corrected…` (never from the
+  row's own updated_by_email), (b) it has no filling_date / agm_held_date, (c)
+  its fye_date equals the date the run wants, (d) the run's budget of 10
+  restores is not spent (ONE budget per run — sync-workflow calls once per
+  company), and (e) the UPDATE really changed one row. The slot is looked up
+  under BOTH unique keys, (entity_name, fye_month, fye_year) and (company_id,
+  fye_year, fye_month). Anything else stays hidden and is raised as the
+  Automation Health exception `catch_up_blocked_by_excluded` with its reason;
+  the restore check fails open (an error never costs the night's other
+  inserts). It restores only the SYSTEM's own hide, only when a run wants the
+  slot — it is NOT the closure (INV-AR-020). Guarded by `test-ar-fye-restore.ts`.
+- **INV-AR-020** — Controls report OUTCOMES, from a source independent of the
+  mechanism they check (9-seat council, 2026-10-10). (1) A counter counts rows
+  really written: an upsert with ignoreDuplicates is followed by
+  `.select('id')` and counts what came back. Commit 61b29a3 (28 Aug) turned a
+  unique-key failure that had alarmed AR Generate daily for a week into silent
+  success and counted the intent (`catchUpInserted = catchUpRows.length`), which
+  very probably hid INV-AR-019 for six weeks (BEAUTY is the only company in
+  that state and the timing matches). (2) An automation exception is resolved only by
+  a run that saw every company; a catch-up cut short by its deadline never
+  closes one. (3) WHO hid a row is read from ar_reminder_audit, never from the
+  row's updated_by_email: `syncPicToArReminder` stamps it on EVERY row of the
+  company, hidden ones included. (4) The closure is `lib/ar-coverage.ts` +
+  `scripts/ar-coverage-report.ts`: for each active client, TeamWork's next open
+  cycle (Master List next_agm_due_date, matched to the company's OWN FYE month:
+  FYE + 6 months + up to 130 days of EOT) must have a visible ar_reminder row
+  when its FYE month is inside the generate window (current month + 5). Reported
+  categories: MISSING, WRONG_MONTH, DUPLICATE, LABEL_MISMATCH, STALE_OPEN (an
+  older unfiled row whose own AGM date has passed), DATE_INCONSISTENT (the date
+  fits no year of the company's FYE month), STALE_MASTER (the open cycle is more
+  than 12 months old). It only REPORTS and never repairs: no fifth restore
+  mechanism. Companies without a unique Master List row for the UEN are listed
+  as not evaluated, never guessed. Guarded by `test-ar-coverage.ts`.
