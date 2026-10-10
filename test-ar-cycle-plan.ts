@@ -77,7 +77,14 @@ check('TeamWork\'s year label may differ from the FYE\'s calendar year (14 of 1,
   const p = plan([row(60, 'April', 2025, '2026-04-30')], [cyc('2025-04-30', true, 2024), cyc('2026-04-30', false, 2025)], 'April');
   return p.covered === 1 && !p.wanted.length;
 })());
-check('a row with the right month and year but another date is reported as drift, not duplicated', (() => { const p = plan([row(61, 'September', 2026, '2026-09-29')], beautyCycles); return !p.wanted.length && p.reports.some(r => r.kind === 'date-drift'); })());
+check('a row with the right month and year but another date is never duplicated: it is realigned onto TeamWork\'s date (INV-AR-021 (9))', (() => {
+  const p = plan([row(61, 'September', 2026, '2026-09-29')], beautyCycles);
+  return !p.wanted.length && p.covered === 1 && p.align.length === 1 && p.align[0].from === '2026-09-29' && p.align[0].to === '2026-09-30' && !p.reports.some(r => r.kind === 'date-drift');
+})());
+check('...and when TeamWork\'s own date is one the company cannot be trusted to have (a lone 21st), the drift is only REPORTED', (() => {
+  const p = plan([row(62, 'September', 2026, '2026-09-30')], [cyc('2024-09-30', true), cyc('2025-09-30', true), cyc('2026-09-21')]);
+  return !p.align.length && !p.wanted.length && p.reports.some(r => r.kind === 'date-drift' && r.rowId === 62);
+})());
 check('nearestYearOf picks the closest occurrence of the month', nearestYearOf('September', '2026-10-31') === 2026 && nearestYearOf('December', '2026-01-31') === 2025 && nearestYearOf('January', '2026-12-31') === 2027);
 
 console.log('\n--- a TeamWork leftover cycle (INV-AR-021 (7)): followed past, never wanted, reported ---');
@@ -88,6 +95,37 @@ console.log('\n--- a TeamWork leftover cycle (INV-AR-021 (7)): followed past, ne
   check('without the rule an open other-month cycle is only reported as "other-month"', without.reports.some(r => r.kind === 'other-month-cycle' && r.fyeIso === '2026-06-30'));
   check('with it the cycle is reported as a LEFTOVER and is neither wanted nor reported twice', flagged.reports.some(r => r.kind === 'leftover-cycle' && r.fyeIso === '2026-06-30') && !flagged.reports.some(r => r.kind === 'other-month-cycle') && !flagged.wanted.some(w => w.cycleFye === '2026-06-30'));
   check('the real December cycle is still wanted', flagged.wanted.map(w => w.cycleFye).join() === '' || flagged.wanted.every(w => w.cycleFye !== '2026-06-30'));
+}
+
+console.log('\n--- dates: an unfiled row whose FYE date is not TeamWork\'s date for its cycle (BYTESFORCE: 28 Dec 2026, TeamWork 31 Dec 2026) ---');
+{
+  const dec = [cyc('2024-12-31', true), cyc('2025-12-31', true), cyc('2026-12-31')];
+  const bytes = (o: Partial<PlanRow> = {}) => row(922, 'December', 2026, '2026-12-28', { due_date: '2027-07-28', ...o });
+  const al = (rows: PlanRow[], cycles = dec, E = 'December', T: string | null = E, extra: object = {}) => plan(rows, cycles, E, T, extra).align;
+  const one = al([bytes()]);
+  check('BYTESFORCE: 28 Dec 2026 -> 31 Dec 2026, and the still-computed due date (FYE + 7 months) moves with it', one.length === 1 && one[0].from === '2026-12-28' && one[0].to === '2026-12-31' && one[0].dueFrom === '2027-07-28' && one[0].dueTo === '2027-07-31', one);
+  check('a due date that is NOT the computed one (an extension, a TeamWork value) is left alone', (() => { const a = al([bytes({ due_date: '2027-08-31' })]); return a.length === 1 && a[0].dueTo === null && a[0].dueFrom === null; })());
+  check('a row with no due date still aligns, due date untouched', (() => { const a = al([bytes({ due_date: null })]); return a.length === 1 && a[0].dueTo === null; })());
+  check('SFS CARE: March 2027 row at 30 Mar -> TeamWork\'s 31 Mar 2027', (() => { const a = al([row(1205, 'March', 2027, '2027-03-30')], [cyc('2025-03-31', true), cyc('2026-03-31', true), cyc('2027-03-31')], 'March'); return a.length === 1 && a[0].to === '2027-03-31'; })());
+  check('LIFE CORPORATION: TeamWork has no 2027 cycle yet -> nothing to compare, nothing changed', al([row(1247, 'March', 2027, '2027-03-30')], [cyc('2025-03-31', true), cyc('2026-03-31', true)], 'March').length === 0);
+  check('a FINISHED cycle aligns too — the exact-date row sync must reach the row to mark it filed', al([bytes()], [cyc('2025-12-31', true), cyc('2026-12-31', true)]).length === 1);
+  check('a February row at 28 Feb 2028 moves to the 29th (a leap-year month-end)', al([row(5, 'February', 2028, '2028-02-28')], [cyc('2027-02-28', true), cyc('2028-02-29')], 'February').length === 1);
+  check('a row already on TeamWork\'s date is left alone', al([bytes({ fye_date: '2026-12-31' })]).length === 0);
+  check('only the SAME calendar month is compared: a row in December 2026 is not moved by a cycle of December 2027, nor by another month\'s cycle', al([bytes()], [cyc('2025-12-31', true), cyc('2027-12-31')]).length === 0 && al([bytes()], [cyc('2026-11-30')]).length === 0);
+
+  console.log('   never touched:');
+  check('a filed row, an AGM-held row, a hidden row', al([bytes({ filling_date: '2027-02-01' })]).length === 0 && al([bytes({ agm_held_date: '2027-02-01' })]).length === 0 && al([bytes({ status: 'Excluded' })]).length === 0);
+  check('a row under another month than the FYE month (ghosts and old-month rows are the hide logic\'s)', al([bytes({ fye_month: 'June', fye_date: '2026-06-28' })], [cyc('2025-12-31', true), cyc('2026-06-30'), cyc('2026-12-31')]).length === 0);
+  check('under a Master List override (typed month != TeamWork\'s) nothing is compared', al([row(7, 'September', 2026, '2026-09-29')], [cyc('2025-10-31', true), cyc('2026-10-31')], 'September', 'October').length === 0);
+  check('a row whose own labels disagree with its date (year label 2027, date in 2026) is not guessed at', al([bytes({ fye_year: 2027 })]).length === 0);
+  check('a suspect, leftover or unreadable cycle is never copied — it is reported as drift', (() => {
+    const s = plan([bytes()], dec, 'December', 'December', { suspectDates: new Set(['2026-12-31']) });
+    const l = plan([bytes()], dec, 'December', 'December', { leftoverDates: new Set(['2026-12-31']) });
+    const u = plan([bytes()], [cyc('2025-12-31', true), cyc('2026-12-31', false, null, { uncertain: true })], 'December');
+    return [s, l, u].every(p => p.align.length === 0 && p.reports.some(r => r.kind === 'date-drift' && r.rowId === 922));
+  })());
+  check('two cycles in one calendar month are ambiguous: reported, never guessed', (() => { const p = plan([bytes()], [cyc('2025-12-31', true), cyc('2026-12-15'), cyc('2026-12-31')], 'December'); return p.align.length === 0 && p.reports.some(r => r.kind === 'date-drift'); })());
+  check('the same company with a normal row on TeamWork\'s date produces an empty plan (nothing wanted, hidden or aligned)', (() => { const p = plan([bytes({ fye_date: '2026-12-31' })], dec, 'December'); return !p.wanted.length && !p.hide.length && !p.align.length && p.covered === 1; })());
 }
 
 console.log('\n--- read-only by construction ---');

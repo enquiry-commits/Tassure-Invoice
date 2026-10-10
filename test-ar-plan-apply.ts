@@ -2,7 +2,7 @@
 // (lib/ar-plan-apply.ts, lib/ar-fye-reanchor.ts, INV-AR-021). A small in-memory fake of the Supabase query builder records every
 // write, so we can assert on exactly what would reach the database — including that shadow mode writes NOTHING.
 import { readFileSync } from 'node:fs';
-import { MAX_PLAN_CHANGES_PER_RUN, MAX_PLAN_HIDES_PER_RUN, MAX_PLAN_INSERTS_PER_RUN, executeArPlans, type PlanItem } from './lib/ar-plan-apply';
+import { ALIGN_ACTOR_NAME, MAX_ALIGN_CANDIDATES_PER_RUN, MAX_PLAN_ALIGNS_PER_RUN, MAX_PLAN_CHANGES_PER_RUN, MAX_PLAN_HIDES_PER_RUN, MAX_PLAN_INSERTS_PER_RUN, executeArPlans, type PlanItem } from './lib/ar-plan-apply';
 import { planCompanyAr, type PlanRow } from './lib/ar-cycle-plan';
 import { applyReanchor, planReanchor, reanchorAfterMasterListFyeEdit } from './lib/ar-fye-reanchor';
 import { FYE_EXCLUDER, FYE_EXCLUDER_NAME_PREFIX, isSystemFyeExclusion } from './lib/ar-fye-restore';
@@ -52,7 +52,8 @@ class Fake {
     }
     if (op.kind === 'update') {
       const id = op.filters.find(f => f[0] === 'eq' && f[1] === 'id')?.[2];
-      const hit = this.rows.find(r => r.id === id);
+      // every other eq guard on a column the row has must hold too (a date that moved under us means no match)
+      const hit = this.rows.find(r => r.id === id && op.filters.every(([name, col, val]) => name !== 'eq' || !(col in r) || r[col] === val));
       if (!hit || !this.updateMatches) return { data: [], error: null };
       Object.assign(hit, op.payload);
       return { data: [{ id }], error: null };
@@ -154,6 +155,62 @@ const buildInsert = (_c: number, w: { slot: { fye_month: string; fye_year: numbe
     check(`more than ${MAX_PLAN_CHANGES_PER_RUN} planned changes in one night means the PLAN is suspect: nothing is applied, it is reported`, out.tripped && out.exceedsLimit && writes(db).length === 0 && out.hidden.length === n, { tripped: out.tripped, writes: writes(db).length });
   }
   check('the per-run insert limit exists and is small', MAX_PLAN_INSERTS_PER_RUN <= 10);
+
+  console.log('\n--- dates: a row is moved onto TeamWork\'s FYE date (INV-AR-021 (9)); its own switch, shadow first ---');
+  {
+    const dec = [cyc('2024-12-31', true), cyc('2025-12-31', true), cyc('2026-12-31')];
+    const mkBytes = (id = 922, companyId = 77, name = 'BYTESFORCE INTERNATIONAL PTE. LTD.', o: Record<string, unknown> = {}) =>
+      rowOf(id, 'December', 2026, '2026-12-28', { entity_name: name, company_id: companyId, due_date: '2027-07-28', ...o });
+    const itemOf = (r: ReturnType<typeof mkBytes>): PlanItem => {
+      const company = { id: r.company_id as number, name: r.entity_name as string };
+      return { company, plan: planCompanyAr({ company, effectiveMonth: 'December', teamworkMonth: 'December', cycles: dec, rows: [r as PlanRow], today: '2026-10-10' }) };
+    };
+    const rowNow = (db: Fake, id: number) => db.rows.find(r => r.id === id)!;
+
+    const shadow = new Fake([mkBytes()]);
+    const so = await executeArPlans(asClient(shadow), [itemOf(mkBytes())], { apply: false, buildInsert });
+    check('SHADOW (the default): says which row WOULD move, from and to, and writes nothing', so.alignMode === 'shadow' && so.alignCandidates === 1 && so.aligned.length === 1 && so.aligned[0].from === '2026-12-28' && so.aligned[0].to === '2026-12-31' && writes(shadow).length === 0, so);
+
+    const live = new Fake([mkBytes()]);
+    const lo = await executeArPlans(asClient(live), [itemOf(mkBytes())], { apply: false, alignApply: true, buildInsert });
+    const after = rowNow(live, 922);
+    check('with its own switch on (the rest of the plan still in shadow) the row moves: 28 Dec -> 31 Dec, due date 28 Jul -> 31 Jul', lo.alignMode === 'apply' && lo.aligned.length === 1 && after.fye_date === '2026-12-31' && after.due_date === '2027-07-31', { lo, after });
+    check('month, year, status and who-did-it: nothing else changes, the actor is the system\'s and is NOT the FYE-exclusion name', after.fye_month === 'December' && after.fye_year === 2026 && after.status === 'Pending' && after.updated_by_email === 'system:teamwork' && after.updated_by_name === ALIGN_ACTOR_NAME
+      && !isSystemFyeExclusion({ by: after.updated_by_email as string, byName: after.updated_by_name as string, statusBefore: 'Pending', at: '' }), after);
+    check('exactly one UPDATE reached ar_reminder, no insert, no hide', writes(live).length === 1 && writes(live)[0].kind === 'update', writes(live));
+    check('the UPDATE is guarded by the row, the date and the due date it read, by "unfiled" and by "not hidden"', (() => {
+      const f = writes(live)[0].filters.map(x => `${x[0]}:${x[1]}`);
+      return ['eq:id', 'eq:fye_date', 'eq:due_date', 'is:filling_date', 'is:agm_held_date', 'or:status.is.null,status.neq.Excluded'].every(x => f.includes(x));
+    })(), writes(live)[0].filters);
+
+    const moved = new Fake([mkBytes()]);
+    moved.updateMatches = 0;   // the date changed between the read and the write
+    const mo = await executeArPlans(asClient(moved), [itemOf(mkBytes())], { apply: false, alignApply: true, buildInsert });
+    check('a row that changed under us is reported failed, never counted as aligned', mo.failed.length === 1 && mo.failed[0].what === 'align' && !mo.aligned.length, mo);
+    const guard = new Fake([mkBytes(922, 77, 'BYTESFORCE INTERNATIONAL PTE. LTD.', { fye_date: '2026-12-29' })]);   // somebody moved it meanwhile
+    const go = await executeArPlans(asClient(guard), [itemOf(mkBytes())], { apply: false, alignApply: true, buildInsert });
+    check('...including when the stored date is no longer the one the plan read', go.failed.length === 1 && !go.aligned.length && rowNow(guard, 922).fye_date === '2026-12-29', go);
+
+    const many = Array.from({ length: MAX_PLAN_ALIGNS_PER_RUN + 3 }, (_, i) => mkBytes(1000 + i, 5000 + i, `ALIGN ${i}`));
+    const bud = new Fake(many.map(r => ({ ...r })));
+    const bo = await executeArPlans(asClient(bud), many.map(itemOf), { apply: false, alignApply: true, buildInsert });
+    check(`at most ${MAX_PLAN_ALIGNS_PER_RUN} rows per run; the rest are reported`, bo.aligned.length === MAX_PLAN_ALIGNS_PER_RUN && bo.failed.filter(f => f.what === 'align').length === 3 && !bo.alignTripped, { aligned: bo.aligned.length, failed: bo.failed.length });
+
+    const mass = Array.from({ length: MAX_ALIGN_CANDIDATES_PER_RUN + 1 }, (_, i) => mkBytes(2000 + i, 6000 + i, `MASS ALIGN ${i}`));
+    const mdb = new Fake(mass.map(r => ({ ...r })));
+    const mro = await executeArPlans(asClient(mdb), mass.map(itemOf), { apply: false, alignApply: true, buildInsert });
+    check(`more than ${MAX_ALIGN_CANDIDATES_PER_RUN} candidates in one night means the NIGHT is suspect: nothing is aligned, it is reported`, mro.alignTripped && mro.alignCandidates === mass.length && writes(mdb).length === 0 && mro.aligned.length === mass.length, { tripped: mro.alignTripped, writes: writes(mdb).length });
+
+    const ghosts = Array.from({ length: MAX_PLAN_CHANGES_PER_RUN + 1 }, (_, i) => rowOf(3000 + i, 'October', 2025, '2025-10-31', { entity_name: `GHOST ${i}`, company_id: 7000 + i }));
+    const ghostItems = ghosts.map((r, i) => ({ company: { id: 7000 + i, name: `GHOST ${i}` }, plan: planCompanyAr({ company: { id: 7000 + i, name: `GHOST ${i}` }, effectiveMonth: 'September', teamworkMonth: 'September', cycles: [cyc('2025-09-30', true)], rows: [r as PlanRow], today: '2026-10-10' }) }));
+    const sus = new Fake([mkBytes(), ...ghosts.map(r => ({ ...r }))]);
+    const suo = await executeArPlans(asClient(sus), [itemOf(mkBytes()), ...ghostItems], { apply: true, alignApply: true, buildInsert });
+    check('on a night the rest of the plan is already suspect (too many changes wanted), nothing is aligned either', suo.tripped && suo.alignTripped && writes(sus).length === 0 && rowNow(sus, 922).fye_date === '2026-12-28', { tripped: suo.tripped, alignTripped: suo.alignTripped, writes: writes(sus).length });
+
+    const keepsDue = new Fake([mkBytes(922, 77, 'BYTESFORCE INTERNATIONAL PTE. LTD.', { due_date: '2027-08-31' })]);   // an extension: not the computed due date
+    await executeArPlans(asClient(keepsDue), [itemOf(mkBytes(922, 77, 'BYTESFORCE INTERNATIONAL PTE. LTD.', { due_date: '2027-08-31' }))], { apply: false, alignApply: true, buildInsert });
+    check('an extended / TeamWork-set due date is not touched by the alignment (the row sync owns it)', rowNow(keepsDue, 922).fye_date === '2026-12-31' && rowNow(keepsDue, 922).due_date === '2027-08-31', rowNow(keepsDue, 922));
+  }
 
   console.log('\n--- Master List FYE edit: AR moves at once ---');
   const company = { id: 1705, name: 'BEAUTY ASSET PTE LTD' };

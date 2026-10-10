@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
+import { clampFyeDay } from '@/lib/ar-fye-resolve';
 
 // Fills in fields Bizfile genuinely can't provide (it's the official ACRA
 // registry extract, not a TeamWork/Tassure-internal record) but that ARE
@@ -106,8 +107,10 @@ export async function GET(req: NextRequest) {
   // This value is used VERBATIM in generated documents
   // (`finperiod_enddate`/`first_finperiod_enddate`), not just shown on
   // screen, so the format matters beyond this page.
-  const financialYearEndDayMonth = fyeDay && fyeMonthIndex !== -1
-    ? `${String(fyeDay).padStart(2, '0')} ${MONTH_NAMES[fyeMonthIndex]}`
+  // The day is cut to what the month can have: a stored 31 for June must not print "31 June" into a generated document (INV-AR-021 (9)).
+  const printedFyeDay = fyeMonthIndex !== -1 ? clampFyeDay(MONTH_NAMES[fyeMonthIndex], fyeDay) : null;
+  const financialYearEndDayMonth = printedFyeDay && fyeMonthIndex !== -1
+    ? `${String(printedFyeDay).padStart(2, '0')} ${MONTH_NAMES[fyeMonthIndex]}`
     : fyeMonthOnly;
 
   const ndNameById = new Map(((ndPeople ?? []) as { id: number; name: string }[]).map(p => [p.id, p.name]));

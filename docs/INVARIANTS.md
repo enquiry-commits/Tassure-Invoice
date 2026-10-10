@@ -41,7 +41,12 @@ again.
   authoritative — only use it to populate an **empty** `fye_month`
   (bootstrap), never to overwrite an already-set value. Real correction must
   come from actual AGM/AR event history. *(source: 2026-08-06,
-  `app/api/teamwork/sync/route.ts`.)*
+  `app/api/teamwork/sync/route.ts`.)* **Extended to `fye_day` on 2026-10-11
+  (INV-AR-021 (9)):** the day of the year end is the same fact as the month —
+  the profile bootstraps month AND day together for a company without a month
+  (`profileFyePatch`) and never again; the day of a stored month comes from the
+  cycles (sync-workflow). Until then this route still overwrote the day every
+  night and AR rows were built as "28 Dec" for a 31 Dec cycle.
 - **INV-TW-004** — An AR/AGM cycle is only "still open" if **neither** its
   AGM nor its AR event shows a held/filing date. Checking each event row in
   isolation produces false results (the "Science In Sport" bug). *(source:
@@ -6144,6 +6149,50 @@ again.
   Seng Xin Hoo 2 (ORBITEZ among them), Hoe Chyi Lim 2, Kah Ye Chin 1, Shi Ming Ang 1 — every name a current staff
   member in lib/staff-directory.ts, so each person's My Tasks gains those Late Filing companies (a Resolved one stays hidden).
   Guarded by `test-late-filing-pic.ts`.
+  (9) THE YEAR-END DAY HAS ONE OWNER, AND A FORECAST ROW IS MOVED ONTO TEAMWORK'S DATE (2026-10-11; Vincent: "为什么早 1-3 天的
+  公司，和TW的日期一样不是本来就是的设置吗？是人工填写错吗？" → "两件都做，对齐先试跑一晚"; reviewed by a 4-seat council — Data-flow
+  architect, Skeptic, Singapore company secretary, Operator). Nine AR rows (BYTESFORCE INTERNATIONAL, EASYBOOK (SG), FREEFLOW
+  SOLUTIONS, FUN FLARE ENTERPRISES, GOLDHILL MEMORIAL CENTRE, LEENDEN BIOTECH DEVELOPMENT ONE, LEENDEN RESEARCH AND CONSULTING,
+  NXDOOR MANAGEMENT, SFS CARE) carried a `fye_date` 1-3 days BEFORE TeamWork's cycle (28 / 30 Dec 2026 for TeamWork's 31 Dec 2026; 30
+  Mar 2027 for 31 Mar 2027), plus a tenth, LIFE CORPORATION SERVICES #1247, still waiting for TeamWork to create its 2027 cycle. NOT a
+  typing error: `companies.fye_month` has come from the cycles since 6 Aug (INV-TW-003) but `companies.fye_day` was still overwritten
+  every night from TeamWork's company PROFILE ("dd/mm"), which keeps the year end from before the company changed it (BYTESFORCE and
+  FUN FLARE 28/02, FREEFLOW / NXDOOR / LEENDEN ×2 30/06, EASYBOOK 30/09 — every cycle 31/12; SFS CARE and GOLDHILL 30/06 against
+  cycles that are all 31/03; INNOSAVV 21/12 against 31/12), and generate's forecast row (`fyeDateFor(year, month, fye_day)`) joined
+  the cycles' month with the profile's day into a date that exists in neither source. Because sync-workflow matches a row to a
+  TeamWork event by EXACT `fye_date`, those rows never received TeamWork's held / filing / due dates (they would have stayed
+  "unfiled", then overdue, in My Tasks after the company filed) and staff cannot fix them (`fye_date` is not an editable AR field).
+  15 active companies had a non-month-end `fye_day`; 10 visible rows carried a wrong date. RULE: (`fye_month`, `fye_day`) is ONE fact
+  with ONE owner — the cycle `assessFye` chose (`FyeAssessment.chosen`), read by sync-workflow every night. `pickFyeDay` takes a
+  month-end, or a day another credible cycle of the same month also used, and refuses a lone odd day (a same-month slip such as
+  21/12 for 31/12 — `assessFye` guards the MONTH, not the day); `fyeDayToWrite` writes it when it differs from the stored day (28 /
+  29 Feb count as the same year end) and fills an EMPTY day only for a non-month-end year end (empty already means "the last day of
+  the month"); the writes are collected during the loop and made after it behind a breaker (more than 40 companies ⇒ none +
+  exception `fye_day_write_blocked`), each guarded by the month and day read and audit-logged. teamwork/sync only BOOTSTRAPS month
+  and day TOGETHER for a company that has no month (`profileFyePatch`); it never overwrites and never "fills the day in" later (that
+  pastes the stale 28 back onto a December company — the council's sharpest point), and the two halves must ship in ONE commit
+  because the crons run teamwork/sync 13:00, generate 19:00, sync-workflow 20:00 UTC and a half fix flips the value every night (the
+  6 Aug month bug again). Exactly ONE place updates `companies.fye_day` (tripwire in `test-ar-fye-resolve.ts`). THE ALIGNMENT:
+  `planCompanyAr` returns `align` — a visible, unfiled (no filing / AGM-held date), not-hidden row under the effective FYE month whose
+  own labels agree with its date, that has exactly ONE TeamWork cycle in the SAME calendar month (never "within 3 days", never a year
+  label) which is not suspect / leftover / uncertain and has a date the company can have (`isUsualFyeDay`), is moved to that cycle's
+  date — open and FINISHED cycles alike (a finished cycle is exactly where the exact-date row sync must reach the row to mark it
+  filed). Under a Master List override nothing is compared. Month, year and status never change; `due_date` moves along ONLY while it
+  still equals the computed FYE + 7 months of the old date (an extension or a TeamWork value is left alone — the next row sync
+  overwrites it with TeamWork's AR due date anyway, INV-TW-005 unchanged); whatever fails a guard is reported as `date-drift`.
+  Carried out by `lib/ar-plan-apply.ts` with its OWN switch, `AR_ALIGN_APPLY` in sync-workflow (ships `false` = SHADOW:
+  `ar_plan.aligned` lists what WOULD move): a guarded UPDATE (id + the `fye_date` read + unfiled + not hidden [+ the due date read],
+  counted only when exactly one row changed; actor `system:teamwork` / "TeamWork Sync (date aligned)" — deliberately not the
+  FYE-exclusion name), 15 rows per run; more than 40 candidates, or a night on which the plan itself exceeds 60 changes, ⇒ none +
+  exception `ar_align_tripped`. Display: Company 360 and the post-incorporate form clamp a stored day to the month (`clampFyeDay`:
+  "June 31" → 30); Late Filing's EOT insert uses TeamWork's exact FYE date (the month-end only for an unreadable cell). Live dry
+  run 2026-10-11 (907 companies, 0 fetch errors): align candidates are exactly the nine rows; `fye_day` rewrites exactly the 15
+  companies (FOMO PAY, FOMO GLOBAL, PETRAM, LIFE, SFS CARE, GOLDHILL, FREEFLOW, NXDOOR, LEENDEN ×2, EASYBOOK 30→31; BYTESFORCE, FUN
+  FLARE 28→31; INNOSAVV 21→31; YAN BIN 31→30); unclear days 0; nothing else in the plan changed. LIFE #1247 is aligned by itself the
+  night after TeamWork creates the 31/03/2027 cycle. Human tasks, not required by the code: after a BizFile+ check correct the
+  TeamWork profile year end of those companies (SFS CARE / GOLDHILL / LIFE may be onboarding errors) and add a profile-update step to
+  the change-of-FYE procedure. Guarded by `test-ar-fye-resolve.ts`, `test-ar-cycle-plan.ts`, `test-ar-plan-apply.ts`; read-only live
+  check: `scripts/ar-plan-dryrun.ts --all`.
   Guarded by `test-ar-fye-resolve.ts` (ORBITEZ's real raw TeamWork rows as the fixture, 13 negative shapes, the
   one-definition tripwire), `test-ar-cycle-plan.ts`, `test-ar-plan-apply.ts`. Read-only live checks:
   `scripts/ar-plan-dryrun.ts`, `scripts/ar-impact-scan.ts` (section 4b lists the leftovers),

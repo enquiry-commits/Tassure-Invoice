@@ -9,10 +9,10 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { toDateStr, addMonths } from '@/lib/date';
 import { isTeamworkActiveCompany } from '@/lib/company-lifecycle';
-import { MONTHS as FYE_MONTHS, assessFye, findLeftoverCycles, leftoverExceptionMessage, parseTwCycles, type BadCell, type LeftoverCycle, type SuspectCycle } from '@/lib/ar-fye-resolve';
+import { MONTHS as FYE_MONTHS, assessFye, findLeftoverCycles, fyeDayToWrite, leftoverExceptionMessage, parseTwCycles, pickFyeDay, type BadCell, type LeftoverCycle, type SuspectCycle } from '@/lib/ar-fye-resolve';
 import { loadManualFyeByUen, effectiveFyeForCompany, type ManualFyeEntry } from '@/lib/ar-fye-manual';
 import { planCompanyAr, type PlanRow } from '@/lib/ar-cycle-plan';
-import { executeArPlans, emptyOutcome, type PlanItem, type PlanOutcome } from '@/lib/ar-plan-apply';
+import { executeArPlans, emptyOutcome, MAX_ALIGN_CANDIDATES_PER_RUN, type PlanItem, type PlanOutcome } from '@/lib/ar-plan-apply';
 
 /**
  * Daily AR-workflow sync: fill ar_reminder rows' AGM/filing dates from
@@ -111,6 +111,11 @@ import { executeArPlans, emptyOutcome, type PlanItem, type PlanOutcome } from '@
  * correction/stale-row-exclusion work above it, which has already
  * succeeded by the time this runs.
  *
+ * INV-AR-021 (9), 2026-10-11 — the year-end DAY (companies.fye_day) is owned HERE with the month: it is the day of the cycle assessFye
+ * chose (a month-end, or a day the company's other cycles use), written whenever it differs from the stored day, behind a breaker.
+ * teamwork/sync only bootstraps month+day for a company without a month. The plan also moves an unfiled row whose FYE date is not
+ * TeamWork's date for its cycle (same calendar month) onto TeamWork's date (`AR_ALIGN_APPLY`, shadow first).
+ *
  * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"/
  * "Last Accts Date"/"Next AGM Due" columns (master_list.last_agm_date/
  * last_ar_date/last_accounts_date/next_agm_due_date) — a DIFFERENT, always-
@@ -165,6 +170,14 @@ const WORK_DEADLINE_MS = 270_000;
 // edge-triggered "hide every unfiled old-month row" + "backfill the earliest open cycle" blocks below are skipped — the plan
 // replaces them (it keeps a real overdue cycle of the old month, which the old block hid).
 const AR_PLAN_APPLY = false;
+// INV-AR-021 (9) — the plan's DATE step. generate forecasts a row's FYE date itself, months ahead; where that date is not TeamWork's date
+// for the cycle (BYTESFORCE: 28 Dec 2026, TeamWork 31 Dec 2026) the exact-date row match below never connects the row with its cycle, so
+// TeamWork's held / filing / due dates never reach it. The plan moves such an unfiled row onto TeamWork's date (lib/ar-cycle-plan.ts
+// `align`, guards in lib/ar-plan-apply.ts). Its own switch, independent of AR_PLAN_APPLY, and shipped in SHADOW like the plan was: the
+// rows it WOULD move are recorded in the run summary (`ar_plan.aligned`); one night is read, then this constant is flipped to true.
+const AR_ALIGN_APPLY = false;
+// companies.fye_day is rewritten from the cycles for at most this many companies in one run; more means the night is suspect and NONE is.
+const MAX_FYE_DAY_WRITES_PER_RUN = 40;
 // How many example lines of each plan list go into the run summary (the counts are always complete).
 const PLAN_SUMMARY_EXAMPLES = 25;
 
@@ -220,7 +233,7 @@ async function syncArWorkflow(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, company_name, internal_id, registration_no, fye_month, pic, sec_pic, is_active, tw_status')
+    .select('id, company_name, internal_id, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status')
     .not('internal_id', 'is', null);
 
   // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
@@ -244,13 +257,13 @@ async function syncArWorkflow(req: NextRequest) {
   // TeamWork company_id -> {companies.id, fye_month}, so the per-company
   // event fetch below can also correct companies.fye_month — see the FYE
   // Mismatch fix further down.
-  const companyByInternalId = new Map<string, { id: number; fye_month: string | null }>();
+  const companyByInternalId = new Map<string, { id: number; fye_month: string | null; fye_day: number | null }>();
   for (const company of companyCandidates) {
     if (company.internal_id && company.registration_no) {
       uenByInternalId.set(company.internal_id as string, String(company.registration_no).trim().toUpperCase());
     }
     if (company.internal_id) {
-      companyByInternalId.set(company.internal_id as string, { id: company.id, fye_month: company.fye_month });
+      companyByInternalId.set(company.internal_id as string, { id: company.id, fye_month: company.fye_month, fye_day: company.fye_day ?? null });
     }
   }
   const { data: activeClientRows } = await supabase
@@ -360,6 +373,9 @@ async function syncArWorkflow(req: NextRequest) {
   const badCells: Array<BadCell & { companyId: number; company: string }> = [];
   const planItems: PlanItem[] = [];
   const overrideDiffs: Array<{ companyId: number; company: string; masterListMonth: string; teamworkMonth: string | null; by: string | null; at: string | null }> = [];
+  // INV-AR-021 (9): companies whose stored year-end DAY is not the one their cycles show — collected here, written after the loop behind a breaker.
+  const fyeDayCandidates: Array<{ companyId: number; company: string; month: string; stored: number | null; day: number; fyeIso: string | null }> = [];
+  const fyeDayUnclear: Array<{ company: string; stored: number | null; fyeIso: string | null }> = [];
   const todayIso = new Date().toISOString().slice(0, 10);   // UTC, like /generate's window
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
@@ -518,12 +534,14 @@ async function syncArWorkflow(req: NextRequest) {
       const latestFyeMonthIdx: number | null = fyeAssessment.month ? FYE_MONTHS.indexOf(fyeAssessment.month as typeof FYE_MONTHS[number]) : null;
       if (latestFyeMonthIdx !== null && latestFyeMonthIdx >= 0) {
         const correctMonth = MONTH_NAMES[latestFyeMonthIdx];
+        let monthSettled = correctMonth === companyInfo.fye_month;   // the day below belongs to THIS month: only judged once the month is right
         if (correctMonth !== companyInfo.fye_month) {
           const { error: fyeErr } = await supabase.from('companies')
             .update({ fye_month: correctMonth })
             .eq('id', companyInfo.id);
           if (fyeErr) fyeMonthErrors++;
           else {
+            monthSettled = true;
             fyeMonthCorrected++;
             await logFieldChange(supabase, {
               tableName: 'companies', rowId: companyInfo.id, field: 'fye_month',
@@ -679,6 +697,20 @@ async function syncArWorkflow(req: NextRequest) {
           }
         }
 
+        // INV-AR-021 (9): the year-end DAY has the same owner as the month — the cycle assessFye chose. teamwork/sync no longer writes it
+        // (it only bootstraps a company without a month, together with that month): TeamWork's company profile still holds the
+        // year end from before many companies changed it (BYTESFORCE: 28/02, every cycle 31/12) and generate built "28 Dec 2026" from
+        // cycle-month + profile-day. A day is written only when the cycles are clear about it (a month-end, or a day the company's other
+        // cycles also use) and differs from the stored one; collected here, written after the loop behind a breaker.
+        if (monthSettled) {
+          const choice = pickFyeDay(twParsed.cycles, fyeAssessment.chosen);
+          const wanted = fyeDayToWrite(companyInfo.fye_day, correctMonth, choice);
+          if (wanted != null) fyeDayCandidates.push({ companyId: companyInfo.id, company: companyLabel, month: correctMonth, stored: companyInfo.fye_day, day: wanted, fyeIso: choice.fyeIso });
+          else if (choice.basis === 'unclear' && companyInfo.fye_day != null && choice.fyeIso && Number(choice.fyeIso.slice(8, 10)) !== companyInfo.fye_day) {
+            fyeDayUnclear.push({ company: companyLabel, stored: companyInfo.fye_day, fyeIso: choice.fyeIso });
+          }
+        }
+
         // Active Client's own FYE column was mirrored here per an earlier
         // request ("CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理") — Vincent
         // later reversed that specifically for FYE: keep it staff-editable,
@@ -792,6 +824,26 @@ async function syncArWorkflow(req: NextRequest) {
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
+  // INV-AR-021 (9): write the year-end days the cycles showed to differ from companies.fye_day. All-or-nothing, like the plan: a night
+  // that wants more than MAX_FYE_DAY_WRITES_PER_RUN is suspect (a parsing change, a mass TeamWork edit) and writes none. Each write is
+  // guarded by the month and the day we read, so a change made meanwhile is never overwritten.
+  let fyeDayWritten = 0, fyeDayErrors = 0;
+  const fyeDayBlocked = fyeDayCandidates.length > MAX_FYE_DAY_WRITES_PER_RUN;
+  const fyeDayDone: Array<{ company: string; from: number | null; to: number; fye_date: string | null }> = [];
+  if (!fyeDayBlocked) {
+    for (const cand of fyeDayCandidates) {
+      const base = supabase.from('companies').update({ fye_day: cand.day }).eq('id', cand.companyId).eq('fye_month', cand.month);
+      const { data: written, error: dayErr } = await (cand.stored == null ? base.is('fye_day', null) : base.eq('fye_day', cand.stored)).select('id');
+      if (dayErr || (written?.length ?? 0) !== 1) { fyeDayErrors++; continue; }
+      fyeDayWritten++;
+      fyeDayDone.push({ company: cand.company, from: cand.stored, to: cand.day, fye_date: cand.fyeIso });
+      await logFieldChange(supabase, {
+        tableName: 'companies', rowId: cand.companyId, field: 'fye_day',
+        oldValue: cand.stored == null ? null : String(cand.stored), newValue: String(cand.day), changedBy: 'system:teamwork-agm-history',
+      });
+    }
+  }
+
   // INV-AR-021: carry out (shadow: only describe) tonight's plan. A company whose TeamWork fetch failed has no plan item, so it is
   // simply not touched tonight.
   let planOutcome: PlanOutcome = emptyOutcome(AR_PLAN_APPLY ? 'apply' : 'shadow');
@@ -800,6 +852,7 @@ async function syncArWorkflow(req: NextRequest) {
     try {
       planOutcome = await executeArPlans(supabase, planItems, {
         apply: AR_PLAN_APPLY,
+        alignApply: AR_ALIGN_APPLY,
         restoreBudget,
         buildInsert: (companyId, w) => {
           const c = companyById.get(companyId)!;   // planItems only hold companies of this map
@@ -860,6 +913,19 @@ async function syncArWorkflow(req: NextRequest) {
     } else {
       await replaceAutomationExceptions('ar_workflow', 'ar_plan_tripped', [], grace);
     }
+    // INV-AR-021 (9): a night that wanted to realign too many rows, or to rewrite too many year-end days, did NONE of it.
+    await replaceAutomationExceptions('ar_workflow', 'ar_align_tripped', planOutcome.alignTripped ? [{
+      key: 'align', name: 'AR date alignment',
+      details: { candidates: planOutcome.alignCandidates, limit: MAX_ALIGN_CANDIDATES_PER_RUN, message: `今晚 AR 日期对齐想改 ${planOutcome.alignCandidates} 行，超过安全上限，所以一行都没改。请先看 TeamWork 有没有批量改动。 / Tonight's AR date alignment wanted ${planOutcome.alignCandidates} rows (limit ${MAX_ALIGN_CANDIDATES_PER_RUN}) or the plan itself was suspect, so NOTHING was aligned.` },
+    }] : [], grace);
+    await replaceAutomationExceptions('ar_workflow', 'fye_day_write_blocked', fyeDayBlocked ? [{
+      key: 'fye_day', name: 'Company year-end days',
+      details: { candidates: fyeDayCandidates.length, limit: MAX_FYE_DAY_WRITES_PER_RUN, message: `今晚想改 ${fyeDayCandidates.length} 家公司的年结「日」，超过安全上限，所以一家都没改。请先看 TeamWork 有没有批量改动。 / ${fyeDayCandidates.length} companies' year-end day differed from their TeamWork cycles (limit ${MAX_FYE_DAY_WRITES_PER_RUN}), so NONE was rewritten tonight.` },
+    }] : [], grace);
+    await replaceAutomationExceptions('ar_workflow', 'fye_day_unclear', fyeDayUnclear.map(u => ({
+      key: u.company, name: u.company,
+      details: { stored_day: u.stored, teamwork_fye_date: u.fyeIso, message: `TeamWork's latest cycle for ${u.company} ends on ${u.fyeIso}, which is not a month-end and no other cycle of the company uses that day, so it was NOT taken as the year-end day (stored: ${u.stored}). If ${u.fyeIso} is a typo, correct it in TeamWork.` },
+    })), grace);
   } catch (e) {
     exceptionsError = e instanceof Error ? e.message : String(e);
   }
@@ -867,18 +933,27 @@ async function syncArWorkflow(req: NextRequest) {
   const head = <T,>(list: readonly T[]) => list.slice(0, PLAN_SUMMARY_EXAMPLES);
   const result = {
     ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0 && fyeCorrectionBackfillErrors === 0
-      && (!AR_PLAN_APPLY || (!planError && planOutcome.failed.length === 0)),
+      && fyeDayErrors === 0
+      && (!AR_PLAN_APPLY || (!planError && planOutcome.failed.length === 0))
+      && (!AR_ALIGN_APPLY || !planOutcome.failed.some(f => f.what === 'align')),
     ar_plan: {
       mode: planOutcome.mode, ran: planEnabled, error: planError, tripped: planOutcome.tripped, exceeds_limit: planOutcome.exceedsLimit,
       companies: planOutcome.companies, wanted: planOutcome.wanted, covered: planOutcome.covered,
       restored: planOutcome.restored.length, inserted: planOutcome.inserted.length, hidden: planOutcome.hidden.length,
       blocked: planOutcome.blocked.length, failed: planOutcome.failed.length,
+      align_mode: planOutcome.alignMode, align_candidates: planOutcome.alignCandidates, align_tripped: planOutcome.alignTripped, aligned: planOutcome.aligned.length,
       reports: planOutcome.reports,
       examples: {
         restored: head(planOutcome.restored), inserted: head(planOutcome.inserted), hidden: head(planOutcome.hidden),
-        blocked: head(planOutcome.blocked), failed: head(planOutcome.failed),
+        aligned: head(planOutcome.aligned), blocked: head(planOutcome.blocked), failed: head(planOutcome.failed),
       },
     },
+    fye_day_candidates: fyeDayCandidates.length,
+    fye_day_written: fyeDayWritten,
+    fye_day_errors: fyeDayErrors,
+    fye_day_blocked: fyeDayBlocked,
+    fye_day_examples: head(fyeDayBlocked ? fyeDayCandidates.map(c => ({ company: c.company, from: c.stored, to: c.day, fye_date: c.fyeIso })) : fyeDayDone),
+    fye_day_unclear: fyeDayUnclear.length,
     teamwork_leftover_cycles: leftoverFound.length,
     teamwork_leftover_examples: head(leftoverFound.map(l => ({ company: l.company, fye_date: l.fyeIso, agm_event_id: l.agmEventId }))),
     fye_slip_cycles: fyeSuspects.length,

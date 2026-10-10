@@ -163,17 +163,24 @@ export type SuspectCycle = { fyeIso: string; kind: 'slip' | 'odd-day' | 'agm-onl
  *   - odd-day: it is not a month-end while every earlier cycle is.
  * Never throws; with no cycle at all the month is null (the caller keeps what it has — an empty answer is never a change).
  */
-export function assessFye(cycles: readonly TwCycle[]): { month: string | null; suspects: SuspectCycle[] } {
+export type FyeAssessment = {
+  month: string | null;
+  /** The cycle that decided the month — the one whose DAY the company's year end has (pickFyeDay). null when no cycle is credible. */
+  chosen: TwCycle | null;
+  suspects: SuspectCycle[];
+};
+
+export function assessFye(cycles: readonly TwCycle[]): FyeAssessment {
   const sorted = [...cycles].sort((a, b) => a.fyeIso.localeCompare(b.fyeIso));
   const suspects: SuspectCycle[] = [];
   for (let i = sorted.length - 1; i >= 0; i--) {
     const c = sorted[i];
     const older = sorted.slice(0, i);
     const month = monthOfIso(c.fyeIso);
-    if (!older.length) return { month, suspects };
+    if (!older.length) return { month, chosen: c, suspects };
     const doneOlder = [...older].reverse().find(isDoneCycle);
     const established = doneOlder ? monthOfIso(doneOlder.fyeIso) : modeMonth(older);
-    if (month === established || isDoneCycle(c)) return { month, suspects };
+    if (month === established || isDoneCycle(c)) return { month, chosen: c, suspects };
     // An AGM event with no AR event beside it is not a financial period TeamWork can vouch for (a real one carries both; 3,057 of
     // 3,063 live cycles do). It may never MOVE the FYE month — ORBITEZ's leftover June 2025 AGM would otherwise flip a December
     // company to June the day someone deletes the wrong one of the two rows both labelled "2025" (council, 2026-10-10).
@@ -194,9 +201,9 @@ export function assessFye(cycles: readonly TwCycle[]): { month: string | null; s
       suspects.push({ fyeIso: c.fyeIso, kind: 'odd-day', note: `${c.fyeIso} is not a month-end although every earlier FYE of this company is, and it would move the FYE to ${month}` });
       continue;
     }
-    return { month, suspects };   // a genuine change of FYE month
+    return { month, chosen: c, suspects };   // a genuine change of FYE month
   }
-  return { month: null, suspects };
+  return { month: null, chosen: null, suspects };
 }
 
 function modeMonth(cycles: readonly TwCycle[]): string {
@@ -206,6 +213,76 @@ function modeMonth(cycles: readonly TwCycle[]): string {
   // ties go to the most recent of the tied months (the cycles are in date order)
   for (const c of cycles) { const m = monthOfIso(c.fyeIso); const k = count.get(m)!; if (k >= n) { best = m; n = k; } }
   return best;
+}
+
+// ── the DAY the financial year ends on (INV-AR-021 (9)) ─────────────────────────────────────────────────────────────
+// companies.fye_month and companies.fye_day are ONE fact — "the year end is 31 December" — and have ONE owner: the cycles TeamWork
+// keeps for the company (what is actually filed with ACRA), read by sync-workflow every night. TeamWork's company PROFILE ("dd/mm")
+// is only a bootstrap for a company that has no month yet (profileFyePatch): it still holds the year end from before many companies
+// changed it (BYTESFORCE: profile 28/02, every AGM/AR cycle 31/12), and mixing the cycles' month with the profile's day built dates
+// that never existed (generate wrote "28 Dec 2026" for BYTESFORCE; TeamWork's cycle is 31 Dec 2026 and the exact-date row match then
+// never connected the two — Vincent, 2026-10-11).
+
+/** A year-end date a company can really have: a month-end, or a day another credible cycle of the same month also uses. */
+export function isUsualFyeDay(cycles: readonly TwCycle[], c: Pick<TwCycle, 'fyeIso'>): boolean {
+  if (isMonthEndIso(c.fyeIso)) return true;
+  return cycles.some(o => o.fyeIso !== c.fyeIso && !o.uncertain && o.fyeIso.slice(5, 7) === c.fyeIso.slice(5, 7) && o.fyeIso.slice(8, 10) === c.fyeIso.slice(8, 10));
+}
+
+export type FyeDayChoice = {
+  /** The day of the month the cycles say the year ends on; null = not clear enough to write anywhere. */
+  day: number | null;
+  basis: 'month-end' | 'habitual' | 'unclear' | 'none';
+  fyeIso: string | null;
+};
+
+/**
+ * The year-end day implied by the cycle assessFye chose. A month-end is taken at once (31 Dec, 30 Sep, 28/29 Feb). A day that is
+ * NOT a month-end is taken only when another cycle of the same month used it too (a company whose year end really is the 15th);
+ * a lone odd day (a same-month keying slip such as 21/12 for 31/12 — assessFye guards the month, not the day) is "unclear" and
+ * written nowhere.
+ */
+export function pickFyeDay(cycles: readonly TwCycle[], chosen: Pick<TwCycle, 'fyeIso'> | null): FyeDayChoice {
+  if (!chosen) return { day: null, basis: 'none', fyeIso: null };
+  const day = Number(chosen.fyeIso.slice(8, 10));
+  if (isMonthEndIso(chosen.fyeIso)) return { day, basis: 'month-end', fyeIso: chosen.fyeIso };
+  if (isUsualFyeDay(cycles, chosen)) return { day, basis: 'habitual', fyeIso: chosen.fyeIso };
+  return { day: null, basis: 'unclear', fyeIso: chosen.fyeIso };
+}
+
+/** 28 and 29 February are the same year end ("the end of February") in different years. */
+export function sameFyeDay(monthName: string | null | undefined, a: number, b: number): boolean {
+  return a === b || (monthName === 'February' && a >= 28 && b >= 28);
+}
+
+/**
+ * The value to write into companies.fye_day, or null when nothing needs writing. An empty stored day already means "the last day of
+ * the month" (generate, AR) — it is filled only when the year end is a day that is NOT the month-end. A stored day is replaced when
+ * it is not the same year end as the cycles' (28/02 against 31/12, a 31 for June).
+ */
+export function fyeDayToWrite(stored: number | null | undefined, monthName: string | null | undefined, choice: FyeDayChoice): number | null {
+  if (choice.day == null) return null;
+  if (stored == null) return choice.basis === 'habitual' ? choice.day : null;
+  return sameFyeDay(monthName, stored, choice.day) ? null : choice.day;
+}
+
+const MAX_DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+/** A stored year-end day cut to what the month can have (YAN BIN: June 31 -> 30; February 30 -> 29). null for a missing/invalid day. */
+export function clampFyeDay(monthName: string | null | undefined, day: number | null | undefined): number | null {
+  if (day == null || !Number.isInteger(day) || day < 1) return null;
+  const i = MONTHS.indexOf(String(monthName ?? '') as (typeof MONTHS)[number]);
+  return i < 0 ? day : Math.min(day, MAX_DAYS_IN_MONTH[i]);
+}
+
+/**
+ * What teamwork/sync may take from TeamWork's company PROFILE year end (INV-TW-003): only to BOOTSTRAP a company that has no FYE month
+ * yet — the month and its day together, because the profile's day belongs to the profile's month. Never to overwrite and never to "fill
+ * the day in" later: the day of a stored month is owned by the cycles (sync-workflow). Filling an empty day from the profile would paste
+ * the stale 28 back onto a December company (council, 2026-10-11).
+ */
+export function profileFyePatch(row: { fye_month?: string | null }, profile: { month: string | null; day: number | null }): { fye_month?: string; fye_day?: number } {
+  if (row.fye_month || !profile.month) return {};
+  return profile.day ? { fye_month: profile.month, fye_day: profile.day } : { fye_month: profile.month };
 }
 
 // ── a cycle TeamWork left behind that cannot be real ────────────────────────────────────────────────────────────────

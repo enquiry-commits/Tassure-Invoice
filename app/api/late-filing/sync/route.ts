@@ -437,7 +437,9 @@ async function syncLateFiling(run: AutomationRun) {
           // window). Same minimal insert shape the late-filing mirror
           // below already uses for the identical situation — no PIC
           // resolution here either, matching that existing precedent.
-          const eotFyeDateIso = new Date(eotFyeYear, eotFyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
+          // TeamWork's own FYE date for the cycle (INV-AR-021 (9)) — the month-end of that month is only the fallback for an unreadable cell:
+          // a computed date is what made generate's rows differ from TeamWork's, and the exact-date row sync then never connects them.
+          const eotFyeDateIso = parseDmyStrict(eotFyeDateRaw) ?? new Date(eotFyeYear, eotFyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
           const { error } = await supabase.from('ar_reminder').insert({
             entity_name: c.company_name,
             company_id: c.id,

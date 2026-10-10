@@ -10,10 +10,10 @@
 import { readFileSync } from 'node:fs';
 import { createAdminClient } from '../lib/supabase';
 import { fetchAgmList, getSessionCookie } from '../lib/teamwork-agm';
-import { assessFye, parseTwCycles } from '../lib/ar-fye-resolve';
+import { assessFye, fyeDayToWrite, parseTwCycles, pickFyeDay } from '../lib/ar-fye-resolve';
 import { effectiveFyeForCompany, loadManualFyeByUen } from '../lib/ar-fye-manual';
 import { planCompanyAr, type PlanRow } from '../lib/ar-cycle-plan';
-import { executeArPlans, type PlanItem } from '../lib/ar-plan-apply';
+import { executeArPlans, MAX_ALIGN_CANDIDATES_PER_RUN, type PlanItem } from '../lib/ar-plan-apply';
 import { isTeamworkActiveCompany, onlyTeamworkActiveCompanies } from '../lib/company-lifecycle';
 import { MONTHS } from '../lib/ar-fye-resolve';
 
@@ -23,10 +23,10 @@ async function runAll() {
   const sb = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
   const manualByUen = await loadManualFyeByUen(sb);
-  const { data: companies, error } = await onlyTeamworkActiveCompanies(sb.from('companies').select('id, company_name, internal_id, registration_no, fye_month, is_active, tw_status'));
+  const { data: companies, error } = await onlyTeamworkActiveCompanies(sb.from('companies').select('id, company_name, internal_id, registration_no, fye_month, fye_day, is_active, tw_status'));
   if (error) throw new Error(error.message);
   const roster = (companies ?? []).filter(c => c.internal_id);
-  const { data: allRows, error: rowsErr } = await sb.from('ar_reminder').select('id, company_id, entity_name, fye_month, fye_year, fye_date, status, filling_date, agm_held_date');
+  const { data: allRows, error: rowsErr } = await sb.from('ar_reminder').select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, status, filling_date, agm_held_date');
   if (rowsErr) throw new Error(rowsErr.message);
   const byCompany = new Map<number, PlanRow[]>();
   const byName = new Map<string, PlanRow[]>();
@@ -38,7 +38,7 @@ async function runAll() {
   console.log(`roster ${roster.length} active companies with a TeamWork id | ar_reminder rows ${allRows?.length} | deliberate Master List FYEs ${manualByUen.size}`);
   const cookie = await getSessionCookie();
   const items: PlanItem[] = [];
-  const stats = { fetched: 0, fetchErrors: 0, noCycles: 0, gateDiffersFromOld: [] as string[], storedDiffersFromDerived: [] as string[], suspects: [] as string[], bad: [] as string[], overrides: [] as string[], uncertain: 0 };
+  const stats = { fetched: 0, fetchErrors: 0, noCycles: 0, gateDiffersFromOld: [] as string[], storedDiffersFromDerived: [] as string[], suspects: [] as string[], bad: [] as string[], overrides: [] as string[], uncertain: 0, dayWrites: [] as string[], dayUnclear: [] as string[] };
   let next = 0;
   const worker = async () => {
     while (next < roster.length) {
@@ -60,6 +60,13 @@ async function runAll() {
       const oldMonth = MONTHS[Number(latest.fyeIso.slice(5, 7)) - 1];
       if (gate.month && gate.month !== oldMonth) stats.gateDiffersFromOld.push(`${c.company_name}: old rule ${oldMonth}, gated ${gate.month}`);
       if (gate.month && gate.month !== c.fye_month) stats.storedDiffersFromDerived.push(`${c.company_name}: stored ${c.fye_month}, TeamWork implies ${gate.month}`);
+      // INV-AR-021 (9): the year-end DAY the nightly sync would write (the same pure functions, judged under the gated month)
+      if (gate.month) {
+        const choice = pickFyeDay(parsed.cycles, gate.chosen);
+        const dayNow = fyeDayToWrite(c.fye_day ?? null, gate.month, choice);
+        if (dayNow != null) stats.dayWrites.push(`${c.company_name}: fye_day ${c.fye_day ?? '(empty)'} -> ${dayNow} (${gate.month}, cycle ${choice.fyeIso}, ${choice.basis})`);
+        else if (choice.basis === 'unclear' && c.fye_day != null && choice.fyeIso && Number(choice.fyeIso.slice(8, 10)) !== c.fye_day) stats.dayUnclear.push(`${c.company_name}: stored ${c.fye_day}, latest cycle ${choice.fyeIso} (not a month-end, no other cycle uses that day)`);
+      }
       const eff = effectiveFyeForCompany(c, manualByUen, gate.month);
       if (!eff.effective) continue;
       const manual = manualByUen.get(String(c.registration_no ?? '').trim().toUpperCase());
@@ -74,6 +81,7 @@ async function runAll() {
   await Promise.all(Array.from({ length: 8 }, () => worker()));
   const outcome = await executeArPlans(sb, items, { apply: false, buildInsert: () => ({}) });
   console.log(`\nfetched ${stats.fetched} (errors ${stats.fetchErrors}, no readable cycle ${stats.noCycles}, uncertain cycles ${stats.uncertain}) | planned ${outcome.companies} | covered ${outcome.covered} | wanted ${outcome.wanted} | exceeds the change limit: ${outcome.exceedsLimit}`);
+  console.log(`align (shadow): ${outcome.alignCandidates} candidates | would trip the breaker (> ${MAX_ALIGN_CANDIDATES_PER_RUN}): ${outcome.alignCandidates > MAX_ALIGN_CANDIDATES_PER_RUN} | year-end days to rewrite: ${stats.dayWrites.length} (breaker at ${40}) | unclear days: ${stats.dayUnclear.length}`);
   console.log('plan reports by kind:', JSON.stringify(outcome.reports));
   const show = <T,>(title: string, list: readonly T[], fmt: (x: T) => string, n = 40) => {
     console.log(`\n== ${title} (${list.length})`);
@@ -83,6 +91,9 @@ async function runAll() {
   show('would RESTORE (hidden by the system, TeamWork wants it)', outcome.restored, x => `#${x.id} ${x.company} — ${x.slot}`);
   show('would INSERT (no row at all)', outcome.inserted, x => `${x.company} — ${x.slot}`);
   show('would HIDE (ghost / replaced)', outcome.hidden, x => `#${x.id} ${x.company} — ${x.slot} [${x.reason}]`);
+  show('would ALIGN (an unfiled row\'s FYE date moves onto TeamWork\'s date)', outcome.aligned, x => `#${x.id} ${x.company} — ${x.slot}: ${x.from} -> ${x.to}`);
+  show('companies.fye_day the nightly sync would rewrite from the cycles', stats.dayWrites, x => x);
+  show('year-end days left alone because TeamWork\'s latest cycle is an unexplained odd day', stats.dayUnclear, x => x);
   show('BLOCKED (left alone, a person decides)', outcome.blocked, x => `#${x.id} ${x.company} — ${x.slot} [${x.why}${x.by ? ' by ' + x.by : ''}]`);
   show('FYE month the new gate sets differently from the old "latest FYE wins" rule', stats.gateDiffersFromOld, x => x);
   show('companies.fye_month that the nightly sync would change (stored vs what TeamWork implies)', stats.storedDiffersFromDerived, x => x);
@@ -119,14 +130,14 @@ async function runAll() {
       console.log(`  month AR runs on: ${eff.effective} (${eff.source})${manual ? ` | Master List ${manual.month} typed by ${manual.by ?? '(flag)'} ${manual.at ?? ''}` : ''}${eff.differs ? ' | DIFFERS from TeamWork' : ''}`);
       if (!isTeamworkActiveCompany(c)) { console.log('  not on the active roster — the plan skips it'); continue; }
       if (!eff.effective) continue;
-      const { data: rows, error: rowsErr } = await sb.from('ar_reminder').select('id, company_id, entity_name, fye_month, fye_year, fye_date, status, filling_date, agm_held_date').or(`company_id.eq.${c.id},entity_name.eq.${String(c.company_name).replace(/[,()]/g, ' ')}`).order('fye_year').order('id');
+      const { data: rows, error: rowsErr } = await sb.from('ar_reminder').select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, status, filling_date, agm_held_date').or(`company_id.eq.${c.id},entity_name.eq.${String(c.company_name).replace(/[,()]/g, ' ')}`).order('fye_year').order('id');
       if (rowsErr) throw new Error(rowsErr.message);
       for (const r of (rows ?? []) as PlanRow[]) console.log(`    row #${r.id} ${r.fye_month} ${r.fye_year} fye_date ${r.fye_date ?? '-'} ${r.status}${r.filling_date ? ' filed ' + r.filling_date : ''}`);
       const plan = planCompanyAr({
         company: { id: c.id, name: c.company_name }, effectiveMonth: eff.effective, teamworkMonth: eff.teamworkMonth, cycles: parsed.cycles,
         suspectDates: new Set(gate.suspects.map(s => s.fyeIso)), rows: (rows ?? []) as PlanRow[], today,
       });
-      console.log(`  PLAN: covered ${plan.covered} | wanted ${plan.wanted.map(w => `${w.slot.fye_month} ${w.slot.fye_year} (${w.slot.fye_date}${w.relabelled ? ', relabelled' : ''})`).join(', ') || '-'} | hide ${plan.hide.map(h => `#${h.row.id} ${h.reason}`).join(', ') || '-'} | reports ${plan.reports.map(r => r.kind).join(', ') || '-'}`);
+      console.log(`  PLAN: covered ${plan.covered} | wanted ${plan.wanted.map(w => `${w.slot.fye_month} ${w.slot.fye_year} (${w.slot.fye_date}${w.relabelled ? ', relabelled' : ''})`).join(', ') || '-'} | hide ${plan.hide.map(h => `#${h.row.id} ${h.reason}`).join(', ') || '-'} | align ${plan.align.map(a => `#${a.row.id} ${a.from}->${a.to}`).join(', ') || '-'} | reports ${plan.reports.map(r => r.kind).join(', ') || '-'}`);
       items.push({ company: { id: c.id, name: c.company_name }, plan });
     }
   }

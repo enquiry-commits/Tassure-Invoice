@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logFieldChange } from './audit-log';
 import { FYE_EXCLUDER, FYE_EXCLUDER_NAME_PREFIX, newRestoreBudget, restoreFyeExcludedRows, slotKey, type RestoreBudget } from './ar-fye-restore';
-import type { CompanyPlan, HideReason, PlanReport, Wanted } from './ar-cycle-plan';
+import type { CompanyPlan, HideReason, PlanAlign, PlanReport, Wanted } from './ar-cycle-plan';
 
 // Carries out (or, in shadow mode, only describes) what lib/ar-cycle-plan.ts decided for every company in one nightly run
 // (INV-AR-021). Everything here is fail-safe in the same ways the FYE restore is (INV-AR-019):
@@ -18,6 +18,11 @@ export const PLAN_HIDE_NAMES: Record<HideReason, string> = {
 export const MAX_PLAN_INSERTS_PER_RUN = 10;
 export const MAX_PLAN_HIDES_PER_RUN = 15;
 export const MAX_PLAN_CHANGES_PER_RUN = 60;
+// INV-AR-021 (9): moving a row's FYE date onto TeamWork's. Its own switch and budgets — 10 rows were wrong when it was written; a
+// night that wants more than MAX_ALIGN_CANDIDATES_PER_RUN is suspect (a mass TeamWork edit, a parsing change) and aligns NOTHING.
+export const MAX_PLAN_ALIGNS_PER_RUN = 15;
+export const MAX_ALIGN_CANDIDATES_PER_RUN = 40;
+export const ALIGN_ACTOR_NAME = 'TeamWork Sync (date aligned)';   // deliberately NOT the FYE-exclusion prefix: never mistaken for a hide
 
 export type PlanItem = { company: { id: number; name: string }; plan: CompanyPlan };
 export type PlanOutcome = {
@@ -29,6 +34,10 @@ export type PlanOutcome = {
   restored: Array<{ id: number; company: string; slot: string }>;   // really restored (apply) / would be (shadow)
   inserted: Array<{ company: string; slot: string }>;               // really inserted (apply) / would be (shadow)
   hidden: Array<{ id: number; company: string; slot: string; reason: HideReason }>;
+  aligned: Array<{ id: number; company: string; slot: string; from: string; to: string }>;   // FYE date moved onto TeamWork's (apply) / would be (shadow)
+  alignMode: 'shadow' | 'apply';
+  alignCandidates: number;                   // rows the plan wants to align tonight (before any budget)
+  alignTripped: boolean;                     // too many candidates, or a suspect night: nothing was aligned
   blocked: Array<{ id: number; company: string; slot: string; why: string; by: string | null }>;   // left as they are, a person decides
   failed: Array<{ what: string; company: string; error: string }>;
   reports: Record<string, number>;           // by kind: suspect-cycle, stale-cycle, other-month-cycle, date-drift, …
@@ -37,7 +46,7 @@ export type PlanOutcome = {
 const slotText = (s: { fye_month: string; fye_year: number }) => `${s.fye_month} ${s.fye_year}`;
 
 export function emptyOutcome(mode: 'shadow' | 'apply'): PlanOutcome {
-  return { mode, tripped: false, exceedsLimit: false, companies: 0, wanted: 0, covered: 0, restored: [], inserted: [], hidden: [], blocked: [], failed: [], reports: {} };
+  return { mode, tripped: false, exceedsLimit: false, companies: 0, wanted: 0, covered: 0, restored: [], inserted: [], hidden: [], aligned: [], alignMode: 'shadow', alignCandidates: 0, alignTripped: false, blocked: [], failed: [], reports: {} };
 }
 
 export function tallyReports(reports: readonly PlanReport[], into: Record<string, number>) {
@@ -47,18 +56,22 @@ export function tallyReports(reports: readonly PlanReport[], into: Record<string
 export async function executeArPlans(
   supabase: SupabaseClient,
   items: readonly PlanItem[],
-  opts: { apply: boolean; restoreBudget?: RestoreBudget; buildInsert: (companyId: number, w: Wanted) => Record<string, unknown> },
+  opts: { apply: boolean; alignApply?: boolean; restoreBudget?: RestoreBudget; buildInsert: (companyId: number, w: Wanted) => Record<string, unknown> },
 ): Promise<PlanOutcome> {
   const out = emptyOutcome(opts.apply ? 'apply' : 'shadow');
+  out.alignMode = opts.alignApply ? 'apply' : 'shadow';
   const wantedAll: Array<{ company: PlanItem['company']; w: Wanted }> = [];
   const hideAll: Array<{ company: PlanItem['company']; row: CompanyPlan['hide'][number]['row']; reason: HideReason }> = [];
+  const alignAll: Array<{ company: PlanItem['company']; a: PlanAlign }> = [];
   for (const it of items) {
     out.companies++;
     out.covered += it.plan.covered;
     tallyReports(it.plan.reports, out.reports);
     for (const w of it.plan.wanted) wantedAll.push({ company: it.company, w });
     for (const h of it.plan.hide) hideAll.push({ company: it.company, row: h.row, reason: h.reason });
+    for (const a of it.plan.align) alignAll.push({ company: it.company, a });
   }
+  out.alignCandidates = alignAll.length;
   out.wanted = wantedAll.length;
 
   let apply = opts.apply;
@@ -97,6 +110,31 @@ export async function executeArPlans(
     hidesLeft--;
     out.hidden.push({ id: row.id, company: company.name, slot: slotText(row), reason });
     await logFieldChange(supabase, { tableName: 'ar_reminder', rowId: row.id, field: 'status', oldValue: row.status, newValue: 'Excluded', changedBy: 'system:teamwork-agm-history' });
+  }
+
+  // 4. dates (INV-AR-021 (9)): an unfiled visible row whose FYE date is not TeamWork's date for its cycle gets TeamWork's date, so the
+  //    exact-date row sync reaches it from the next run on (and, while the row's due date is still the computed FYE + 7 months, the
+  //    due date moves with it; the sync overwrites it with TeamWork's own AR due date anyway once the row is matched). Own switch.
+  //    Month and year never change; a suspect night (the plan above wanted too much) or too many candidates aligns nothing.
+  let alignApply = !!opts.alignApply && !out.exceedsLimit;
+  if (alignApply && alignAll.length > MAX_ALIGN_CANDIDATES_PER_RUN) { out.alignTripped = true; alignApply = false; }
+  if (opts.alignApply && out.exceedsLimit) out.alignTripped = true;
+  let alignsLeft = MAX_PLAN_ALIGNS_PER_RUN;
+  for (const { company, a } of alignAll) {
+    const rec = { id: a.row.id, company: company.name, slot: slotText(a.row), from: a.from, to: a.to };
+    if (!alignApply) { out.aligned.push(rec); continue; }
+    if (alignsLeft <= 0) { out.failed.push({ what: 'align', company: company.name, error: `per-run align budget (${MAX_PLAN_ALIGNS_PER_RUN}) used up` }); continue; }
+    const moveDue = !!(a.dueFrom && a.dueTo);
+    const patch: Record<string, unknown> = { fye_date: a.to, updated_by_email: PLAN_HIDER, updated_by_name: ALIGN_ACTOR_NAME };
+    if (moveDue) patch.due_date = a.dueTo;
+    let q = supabase.from('ar_reminder').update(patch).eq('id', a.row.id).eq('fye_date', a.from);
+    if (moveDue) q = q.eq('due_date', a.dueFrom as string);
+    const { data, error } = await q.is('filling_date', null).is('agm_held_date', null).or('status.is.null,status.neq.Excluded').select('id');
+    if (error || (data?.length ?? 0) !== 1) { out.failed.push({ what: 'align', company: company.name, error: error?.message ?? 'no row was updated (it changed under us)' }); continue; }
+    alignsLeft--;
+    out.aligned.push(rec);
+    await logFieldChange(supabase, { tableName: 'ar_reminder', rowId: a.row.id, field: 'fye_date', oldValue: a.from, newValue: a.to, changedBy: 'system:teamwork-agm-history' });
+    if (moveDue) await logFieldChange(supabase, { tableName: 'ar_reminder', rowId: a.row.id, field: 'due_date', oldValue: a.dueFrom, newValue: a.dueTo, changedBy: 'system:teamwork-agm-history' });
   }
   return out;
 }

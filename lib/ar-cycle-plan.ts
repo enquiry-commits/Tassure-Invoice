@@ -11,13 +11,16 @@
 //             else insert one; a row a person hid is never touched (the executor reports it);
 //   hide    — a visible, unfiled row under another month than the FYE month for which TeamWork has no cycle at that exact
 //             date (a ghost), or which the same cycle now relabelled by a Master List FYE edit replaces;
+//   align   — a visible, unfiled row under the FYE month whose date is not TeamWork's date for the cycle of that SAME calendar month
+//             (generate forecasts a row's date itself, months ahead — BYTESFORCE got 28 Dec 2026, TeamWork's cycle is 31 Dec 2026):
+//             set the row's date to TeamWork's, so the exact-date row sync can finally connect the row with its cycle (INV-AR-021 (9));
 //   reports — things only TeamWork can fix, or that were left alone on purpose.
 // A cycle is matched by its EXACT FYE date, never by "the company's latest month" (the mistake that made the Late Filing
 // ghost rows #866/#867). Rows under the FYE month are never hidden here, so a bad TeamWork night cannot empty the page.
 
 import { addMonthsClamped } from './ar-coverage';
 import { holdsSlot, type Slot } from './ar-fye-restore';
-import { MONTHS, isOpenCycle, monthEndIso, monthOfIso, daysBetweenIso, type TwCycle } from './ar-fye-resolve';
+import { MONTHS, isOpenCycle, isUsualFyeDay, monthEndIso, monthOfIso, daysBetweenIso, type TwCycle } from './ar-fye-resolve';
 
 export const PLAN_WINDOW_MONTHS = 6;        // generate creates rows for the current month and the next 5
 export const PLAN_STALE_AFTER_MONTHS = 12;  // an open cycle older than this is reported, not rebuilt
@@ -25,6 +28,7 @@ export const PLAN_STALE_AFTER_MONTHS = 12;  // an open cycle older than this is 
 export type PlanRow = {
   id: number; entity_name: string; company_id: number | null; fye_month: string; fye_year: number;
   fye_date: string | null; status: string | null; filling_date: string | null; agm_held_date: string | null;
+  due_date?: string | null;                // only read to move a still-untouched computed due date along with an aligned FYE date
 };
 export type PlanInput = {
   company: { id: number; name: string };
@@ -48,9 +52,16 @@ export type PlanReport =
   | { kind: 'other-month-cycle'; fyeIso: string; month: string }
   | { kind: 'date-drift'; rowId: number; rowDate: string; slotDate: string }
   | { kind: 'row-without-date'; rowId: number };
+export type PlanAlign = {
+  row: PlanRow;
+  from: string; to: string;                // the row's FYE date now / TeamWork's date for that cycle (same calendar month)
+  cycleFye: string;
+  dueFrom: string | null; dueTo: string | null;   // set only when the row's due date is still exactly the computed FYE + 7 months of `from`
+};
 export type CompanyPlan = {
   wanted: Wanted[];
   hide: Array<{ row: PlanRow; reason: HideReason }>;
+  align: PlanAlign[];
   covered: number;                         // open, in-window cycles that already have a visible row
   reports: PlanReport[];
 };
@@ -73,13 +84,37 @@ export function planCompanyAr(input: PlanInput): CompanyPlan {
   const E = input.effectiveMonth;
   const T = input.teamworkMonth ?? E;
   const override = T !== E;
-  const plan: CompanyPlan = { wanted: [], hide: [], covered: 0, reports: [] };
+  const plan: CompanyPlan = { wanted: [], hide: [], align: [], covered: 0, reports: [] };
   if (!(MONTHS as readonly string[]).includes(E)) return plan;
 
   const horizonEnd = lastDayOfYm(addMonthsClamped(input.today, (input.windowMonths ?? PLAN_WINDOW_MONTHS) - 1).slice(0, 7));
   const staleBefore = addMonthsClamped(input.today, -(input.staleAfterMonths ?? PLAN_STALE_AFTER_MONTHS));
   const visible = input.rows.filter(r => r.status !== 'Excluded');
   const relabelled = new Map<string, Wanted['slot']>();   // cycle date -> the slot a Master List edit moved it to
+
+  // Dates (INV-AR-021 (9)). A visible, unfiled row under the FYE month is matched to TeamWork's cycle of the SAME calendar month
+  // (never by a year label, never within "a few days" — the month is the match). When the dates differ the row is realigned to the
+  // cycle's date, but only when that date is one the company can really have (a month-end, or a day its other cycles use) and
+  // TeamWork is sure about the cycle: a lone odd date, a keying slip, a leftover or an unreadable cycle is reported, not copied.
+  // Open and finished cycles alike — a finished cycle is exactly where the exact-date row sync must reach the row to mark it filed.
+  // Under a Master List override the rows carry the typed month, TeamWork's cycles another one: nothing to compare.
+  const dateHandled = new Set<number>();
+  if (!override) {
+    for (const r of visible) {
+      if (r.fye_month !== E || r.filling_date || r.agm_held_date) continue;
+      const d = day(r.fye_date);
+      if (!d || monthOfIso(d) !== E || r.fye_year !== Number(d.slice(0, 4))) continue;   // a row whose own labels disagree with its date is not guessed at
+      const same = input.cycles.filter(c => c.fyeIso.slice(0, 7) === d.slice(0, 7));
+      if (same.length === 0 || (same.length === 1 && same[0].fyeIso === d)) continue;
+      dateHandled.add(r.id);
+      const c = same.length === 1 ? same[0] : null;
+      const sure = c && !c.uncertain && !input.suspectDates?.has(c.fyeIso) && !input.leftoverDates?.has(c.fyeIso) && isUsualFyeDay(input.cycles, c);
+      if (!c || !sure) { plan.reports.push({ kind: 'date-drift', rowId: r.id, rowDate: d, slotDate: c?.fyeIso ?? same[0].fyeIso }); continue; }
+      const rowDue = day(r.due_date);
+      const computedDue = addMonthsClamped(d, 7);
+      plan.align.push({ row: r, from: d, to: c.fyeIso, cycleFye: c.fyeIso, dueFrom: rowDue === computedDue ? rowDue : null, dueTo: rowDue === computedDue ? addMonthsClamped(c.fyeIso, 7) : null });
+    }
+  }
 
   for (const c of input.cycles) {
     if (input.suspectDates?.has(c.fyeIso)) { plan.reports.push({ kind: 'suspect-cycle', fyeIso: c.fyeIso }); continue; }
@@ -102,7 +137,7 @@ export function planCompanyAr(input: PlanInput): CompanyPlan {
     if (cover) {
       plan.covered++;
       const rd = day(cover.fye_date);
-      if (rd && rd !== slotDate) plan.reports.push({ kind: 'date-drift', rowId: cover.id, rowDate: rd, slotDate });
+      if (rd && rd !== slotDate && !dateHandled.has(cover.id)) plan.reports.push({ kind: 'date-drift', rowId: cover.id, rowDate: rd, slotDate });
       continue;
     }
     plan.wanted.push({ slot, cycleFye: c.fyeIso, relabelled: moved });

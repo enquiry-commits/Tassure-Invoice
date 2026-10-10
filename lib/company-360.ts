@@ -6,6 +6,7 @@ import { loadCurrentQbValues, withCurrentQbValues } from './current-invoice-valu
 import { pickContact, type CompanyRow as CommsCompanyRow } from './client-comms-resolve';
 import { parseEmailList } from './campaign-recipients';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
+import { clampFyeDay } from './ar-fye-resolve';
 
 // Company 360 — one aggregation function, imported by both the page
 // (server component, no HTTP hop) and the API route (for any future
@@ -333,7 +334,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
       registrationNo: companyRow.registration_no ?? null,
       companyType: companyRow.company_type ?? null,
       fyeMonth: companyRow.fye_month ?? null,
-      fyeDay: companyRow.fye_day ?? null,
+      fyeDay: clampFyeDay(companyRow.fye_month, companyRow.fye_day),   // never a day the month does not have ("June 31", INV-AR-021 (9))
       twStatus: companyRow.tw_status ?? null,
       clientType: companyRow.client_type ?? null,
       isActive: companyRow.is_active ?? null,

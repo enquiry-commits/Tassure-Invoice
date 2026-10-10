@@ -12,6 +12,7 @@ import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
 import { planMasterListStatusPatches } from '@/lib/master-list-status';
 import { isTeamworkStub, isActiveStatus, planCompanyStatusPatch, statusFieldsForNewCompany, findLifecycleInconsistencies } from '@/lib/company-lifecycle';
+import { profileFyePatch } from '@/lib/ar-fye-resolve';
 
 // Vincent, 2026-08-29: this route used to call getSessionCookie() twice —
 // once independently inside syncTeamworkCampaignRecipients, once inside
@@ -347,8 +348,12 @@ async function syncTeamworkCompanies() {
       // FIRST population (still empty) — every later correction is left
       // entirely to the self-correction logic, which is proven more
       // accurate and is the only place that should ever change it again.
-      if (fyeMon && !row.fye_month)                                  patch.fye_month = fyeMon;
-      if (fyeDay && fyeDay !== row.fye_day)                          patch.fye_day = fyeDay;
+      //
+      // The DAY is the same fact as the month ("31 December"), so it has the same rule — and until 2026-10-11 it did not: this line
+      // overwrote companies.fye_day from the same stale profile every night while the month came from the cycles, and generate built
+      // "28 Dec 2026" for BYTESFORCE (profile 28/02, every cycle 31/12) — a date that exists in neither source (INV-AR-021 (9)). Now
+      // the profile's month AND day are used only together, to bootstrap a company that has no month yet (profileFyePatch).
+      Object.assign(patch, profileFyePatch(row, { month: fyeMon, day: fyeDay }));
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
       // Matches "9" and "9,11" alike — a stored value that's still raw
       // TeamWork id(s), single or comma-separated, gets replaced by the
