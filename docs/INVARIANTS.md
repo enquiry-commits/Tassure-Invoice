@@ -6100,6 +6100,39 @@ again.
   (before: the company's latest FYE month + "9 months before the due date", which
   produced ghosts #866 June 2021 and #867 October 2025). A mirrored row carries
   TeamWork's own date, so the nightly plan (3) never calls it a ghost.
-  Guarded by `test-ar-fye-resolve.ts`, `test-ar-cycle-plan.ts`,
-  `test-ar-plan-apply.ts`. Read-only live checks: `scripts/ar-plan-dryrun.ts`,
-  `scripts/late-filing-impact.ts`.
+  (7) A TEAMWORK LEFTOVER CYCLE (2026-10-10; Vincent: "ORBITEZ 就按照最新的跑，但是可以有一个提醒在系统";
+  reviewed by a 4-seat council — Singapore company secretary, Skeptic, Pragmatist, Operator). ORBITEZ's
+  TeamWork list carries an AGM for FYE 30/06/2025 (due 30/12/2025, TeamWork event 8033, NO AR event) inside
+  its December 2024 → December 2025 year (the FYE moved June → December in 2024; the AR for 31/12/2024 was
+  filed 01/09/2025). It made Master List's Next AGM Due 2025-12-30, Late Filing "Overdue 284 days", the
+  coverage check DATE_INCONSISTENT and — once the mirror used exact dates — would have inserted an AR row
+  "June 2025". `findLeftoverCycles` (lib/ar-fye-resolve.ts, the ONE definition, guarded by a tripwire) ignores
+  a cycle ONLY when ALL hold: it is open, no EOT was applied, it has an AGM event but no AR event (3,057 of
+  3,063 live cycles carry both), its month is not the company's FYE month, the latest earlier cycle in the
+  company's month whose AR was FILED exists, and a same-month cycle with both events exists exactly one year
+  after it (±3 days) — a company may change its FYE only from its current or immediately previous one, never
+  inside a filed year. Everything else that merely looks odd — an 18-month transition, a first financial year,
+  an old-month year that is unfiled but has both events, anything held or filed, an LLP, a restored shell — stays
+  COUNTED and is at most reported; the broad rule "other month + a later cycle" was rejected because it would drop a
+  genuinely unfiled old-month year. Live scan 2026-10-10: exactly 1 of 3,063 cycles. TREATMENT: the Late Filing
+  sync drops the events at the single place rows enter (overdue days, next AGM due, EOT pass, the mirror, the FYE
+  month all follow the latest cycle) behind a breaker — more than 3 companies in one run ⇒ NOTHING is ignored and
+  `late_filing / leftover_rule_tripped` is raised; sync-workflow skips it for Master List's Next AGM Due and the
+  FYE-change backfill and hands it to the plan (`leftover-cycle` report, never wanted); generate's catch-up never
+  picks it as the earliest open cycle. `assessFye`: an AGM-only open cycle can never MOVE the FYE month (suspect
+  kind `agm-only`) — otherwise deleting the wrong one of TeamWork's two rows both labelled "2025" would flip
+  ORBITEZ to June and the still-live old hide block would hide its real December row. REMINDER, two channels:
+  (a) staff — one clause in Late Filing's AUTO reasons ("TeamWork has an extra AGM for FYE 30/06/2025, event 8033,
+  that cannot exist - ignored, delete it in TeamWork / 中文") that flows to the Late Filing page, the AR row's
+  "⚠ LATE FILING" line and the LATE badge tooltip (it never contains "Overdue N days" or "STRIKE OFF" — those are
+  parsed); (b) Vincent — exception `ar_workflow / teamwork_leftover_cycle`, Chinese first, naming the event to delete
+  and the one to leave alone; it clears itself once TeamWork is fixed. The Dashboard's Automation Health register
+  is VINCENT-ONLY (his own 2026-09-11 rule, app/api/automation/health/route.ts answers 403 to everyone else): no
+  exception raised by any sync reaches staff — anything staff must see goes into a remark or a badge. KNOWN GAP
+  (pre-existing, found by the council, NOT fixed): the Late Filing mirror inserts AR rows WITHOUT a PIC, and My Tasks
+  matches by PIC, so those rows are on nobody's list — 18 of the 26 marker rows on 2026-10-10, ORBITEZ's real
+  overdue row #886 among them; fixing it needs Vincent's go-ahead.
+  Guarded by `test-ar-fye-resolve.ts` (ORBITEZ's real raw TeamWork rows as the fixture, 13 negative shapes, the
+  one-definition tripwire), `test-ar-cycle-plan.ts`, `test-ar-plan-apply.ts`. Read-only live checks:
+  `scripts/ar-plan-dryrun.ts`, `scripts/ar-impact-scan.ts` (section 4b lists the leftovers),
+  `scripts/ar-cycle-shapes.ts`, `scripts/late-filing-impact.ts`.

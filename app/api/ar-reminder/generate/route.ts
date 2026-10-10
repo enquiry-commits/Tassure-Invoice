@@ -8,6 +8,7 @@ import { toDateStr, addMonths } from '@/lib/date';
 import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
 import { restoreFyeExcludedRows, newRestoreBudget, slotKey, type Slot } from '@/lib/ar-fye-restore';
 import { loadManualFyeByUen, effectiveFyeForCompany, type ManualFyeEntry } from '@/lib/ar-fye-manual';
+import { leftoverFyeDates } from '@/lib/ar-fye-resolve';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -378,11 +379,14 @@ async function generateArRows() {
                 // either event in isolation reaches the wrong answer for the
                 // other). A cycle counts as open only if NEITHER shows one.
                 const cycles = new Map<string, { yearLabel: string; agmDone: boolean; arDone: boolean }>();
+                // INV-AR-021 (7): a TeamWork leftover (an AGM with no AR inside a filed year of the company's own month — ORBITEZ's
+                // June 2025) is never "the earliest open cycle"; lib/ar-fye-resolve.ts findLeftoverCycles is the one definition.
+                const leftoverFyes = leftoverFyeDates(result.data ?? []);
                 for (const ev of result.data ?? []) {
                   const [event, yearLabel, fyeRaw, , , heldRaw, filingRaw] = ev;
                   if (event !== 'AGM' && event !== 'AR') continue;
                   const fyeDate = toIsoDate(parseDmy(fyeRaw));
-                  if (!fyeDate) continue;
+                  if (!fyeDate || leftoverFyes.has(fyeDate)) continue;
                   if (!cycles.has(fyeDate)) cycles.set(fyeDate, { yearLabel, agmDone: false, arDone: false });
                   const done = !!(toIsoDate(parseDmy(heldRaw)) || toIsoDate(parseDmy(filingRaw)));
                   const g = cycles.get(fyeDate)!;

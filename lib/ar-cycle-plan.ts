@@ -32,6 +32,7 @@ export type PlanInput = {
   teamworkMonth: string | null;            // the month of TeamWork's cycles; differs from effectiveMonth only under a Master List edit
   cycles: readonly TwCycle[];
   suspectDates?: ReadonlySet<string>;      // cycles lib/ar-fye-resolve.ts assessFye refused to believe
+  leftoverDates?: ReadonlySet<string>;     // cycles findLeftoverCycles says cannot be real (a TeamWork leftover): followed past, never wanted
   rows: readonly PlanRow[];                // EVERY ar_reminder row of the company, hidden ones too
   today: string;                           // YYYY-MM-DD
   windowMonths?: number;
@@ -41,6 +42,7 @@ export type Wanted = { slot: Slot & { fye_date: string }; cycleFye: string; rela
 export type HideReason = 'phantom' | 'superseded-by-master-list';
 export type PlanReport =
   | { kind: 'suspect-cycle'; fyeIso: string }
+  | { kind: 'leftover-cycle'; fyeIso: string }
   | { kind: 'uncertain-cycle'; fyeIso: string }
   | { kind: 'stale-cycle'; fyeIso: string }
   | { kind: 'other-month-cycle'; fyeIso: string; month: string }
@@ -81,6 +83,7 @@ export function planCompanyAr(input: PlanInput): CompanyPlan {
 
   for (const c of input.cycles) {
     if (input.suspectDates?.has(c.fyeIso)) { plan.reports.push({ kind: 'suspect-cycle', fyeIso: c.fyeIso }); continue; }
+    if (input.leftoverDates?.has(c.fyeIso)) { plan.reports.push({ kind: 'leftover-cycle', fyeIso: c.fyeIso }); continue; }
     if (c.uncertain) { plan.reports.push({ kind: 'uncertain-cycle', fyeIso: c.fyeIso }); continue; }
     if (!isOpenCycle(c)) continue;
     const m = monthOfIso(c.fyeIso);

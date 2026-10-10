@@ -11,7 +11,7 @@ import {
   AR_SYSTEM_EXCLUDER, AR_SYSTEM_RESTORER, MAX_AUTO_EXCLUSIONS_PER_RUN, MAX_AUTO_RESTORES_PER_RUN,
 } from '@/lib/company-lifecycle';
 import { todaySGT } from '@/lib/date';
-import { assessFye, parseDmyStrict, parseTwCycles } from '@/lib/ar-fye-resolve';
+import { assessFye, findLeftoverCycles, leftoverReminder, MAX_LEFTOVER_COMPANIES_PER_RUN, parseDmyStrict, parseTwCycles, type LeftoverCycle } from '@/lib/ar-fye-resolve';
 
 /**
  * Detects late filers from TeamWork's per-company AGM/AR history.
@@ -157,6 +157,21 @@ async function syncLateFiling(run: AutomationRun) {
     }));
     const evaluations = await evaluateCompanies(targets, cookie, run, controller.signal);
 
+    // INV-AR-021 (7): a cycle TeamWork left behind that cannot be real (lib/ar-fye-resolve.ts findLeftoverCycles — the ONE definition;
+    // ORBITEZ's AGM for FYE 30/06/2025 with no AR event inside its filed Dec 2024 -> Dec 2025 year) is dropped from `rows` below, at the
+    // single place they enter, so overdue days, the next AGM due, the EOT pass, the mirror into AR Reminder and the FYE month all follow
+    // the latest cycle (Vincent: "ORBITEZ 就按照最新的跑"). The rule is narrow; if MORE than MAX_LEFTOVER_COMPANIES_PER_RUN companies match in
+    // one run something is wrong (a TeamWork glitch, a parsing change) and NOTHING is ignored tonight — a real overdue cycle is never
+    // dropped in bulk, and the run says so.
+    const leftoverAll = new Map<number, LeftoverCycle[]>();
+    for (const ev of evaluations) {
+      if (ev.error) continue;
+      const found = findLeftoverCycles(parseTwCycles(ev.rows ?? []).cycles);
+      if (found.length) leftoverAll.set(ev.company.id, found);
+    }
+    const leftoverTripped = leftoverAll.size > MAX_LEFTOVER_COMPANIES_PER_RUN;
+    const leftoverByCompany = leftoverTripped ? new Map<number, LeftoverCycle[]>() : leftoverAll;
+
     const { data: existingManual, error: existingError } = await supabase
       .from('late_filing_companies')
       .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields, resolved_but_still_overdue_since, mirrored_ar_reminder_id');
@@ -267,7 +282,10 @@ async function syncLateFiling(run: AutomationRun) {
       }
       successfullyEvaluated++;
 
-      const rows = evaluation.rows ?? [];
+      const allRows = evaluation.rows ?? [];
+      const leftover = leftoverByCompany.get(c.id) ?? [];
+      const leftoverFyes = new Set(leftover.map(l => l.fyeIso));
+      const rows = leftoverFyes.size ? allRows.filter(row => !leftoverFyes.has(parseDmyStrict(String(row[2] ?? '')) ?? '')) : allRows;
       const existing = (c.registration_no ? byUen.get(c.registration_no) : null)
         ?? byName.get(c.company_name.toLowerCase());
       if (existing) evaluatedIds.add(existing.id);
@@ -498,6 +516,10 @@ async function syncLateFiling(run: AutomationRun) {
 
       const reasons: string[] = [];
       if (currentOverdueDays > OVERDUE_THRESHOLD_DAYS) reasons.push(`Overdue ${currentOverdueDays} days`);
+      // The reminder staff actually see: this text goes into the Late Filing page's remark AND, through the reconciliation pass, into the
+      // AR Reminder row's "⚠ LATE FILING" line and its LATE badge tooltip. (The Dashboard's exception register is Vincent-only.) It must
+      // never contain "Overdue N days" (lib/late-filing-categorize.ts reads the first one) or "STRIKE OFF".
+      for (const l of leftover) reasons.push(leftoverReminder(l));
       if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) {
         reasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
       }
@@ -976,6 +998,10 @@ async function syncLateFiling(run: AutomationRun) {
       replaceAutomationExceptions('late_filing', 'active_company_ar_all_hidden', activeWithAllArHidden.map(c => ({
         key: c.uen, name: c.name, details: { hidden_rows: c.hiddenRows },
       }))),
+      // INV-AR-021 (7): the leftover-cycle rule matched too many companies for one run, so it ignored none (see leftoverTripped above).
+      replaceAutomationExceptions('late_filing', 'leftover_rule_tripped', leftoverTripped
+        ? [{ key: 'leftover-rule', name: 'Leftover TeamWork cycles', details: { companies: leftoverAll.size, limit: MAX_LEFTOVER_COMPANIES_PER_RUN, message: `The rule for TeamWork leftover cycles matched ${leftoverAll.size} companies in one run (limit ${MAX_LEFTOVER_COMPANIES_PER_RUN}), so tonight it ignored NONE of them. Check TeamWork for a mass data change, or the rule in lib/ar-fye-resolve.ts findLeftoverCycles.` } }]
+        : []),
     ]);
 
     const result = {
@@ -994,6 +1020,9 @@ async function syncLateFiling(run: AutomationRun) {
       exclusionBlocked: exclusionPlan.blocked ? exclusionPlan.candidates.length : 0,
       restoreBlocked: restorePlan.blocked ? restorePlan.candidates.length : 0,
       activeCompaniesWithAllArHidden: activeWithAllArHidden.length,
+      // INV-AR-021 (7): companies whose leftover TeamWork cycle was ignored tonight (empty when the rule tripped).
+      leftoverCycles: [...leftoverByCompany.entries()].map(([id, list]) => ({ companyId: id, fye: list.map(l => l.fyeIso) })),
+      leftoverRuleTripped: leftoverTripped,
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,

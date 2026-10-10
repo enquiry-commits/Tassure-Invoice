@@ -1,8 +1,9 @@
 // Run: npx tsx test-ar-fye-resolve.ts — which FYE month AR follows (lib/ar-fye-resolve.ts, INV-AR-021).
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { addMonthsClamped } from './lib/ar-coverage';
+import { categorizeLateFilingRow } from './lib/late-filing-categorize';
 import {
-  addYearsIso, allDmyStrict, assessFye, fyeMonthName, isMonthEndIso, isPersonActor, manualFyeFromMaster, parseDmyStrict, parseLatestDmyStrict,
+  addYearsIso, allDmyStrict, assessFye, findLeftoverCycles, fyeMonthName, leftoverExceptionMessage, leftoverFyeDates, leftoverReminder, isMonthEndIso, isPersonActor, manualFyeFromMaster, parseDmyStrict, parseLatestDmyStrict,
   parseTwCycles, resolveEffectiveFye, STATUTORY_AGM_MONTHS, STATUTORY_AR_MONTHS, type TwCycle,
 } from './lib/ar-fye-resolve';
 
@@ -105,6 +106,75 @@ const lfSync = readFileSync('app/api/late-filing/sync/route.ts', 'utf8');
 check('the Late Filing list uses the statutory months and no longer adds 9', /STATUTORY_AGM_MONTHS/.test(lfRoute) && !/getMonth\(\)\s*\+\s*9/.test(lfRoute));
 check('the Late Filing sync mirrors the cycle by its EXACT FYE date, not by guessing from the latest month', /earliestOverdueFyeIso = parseDmyStrict\(fyeDateRaw\)/.test(lfSync) && /if \(outstandingDue && earliestOverdueFyeIso\)/.test(lfSync) && (lfSync.match(/fyeMonthIdx0 > dueMonthIdx0/g) ?? []).length === 1);
 check('...and takes its FYE month from assessFye (no private "latest FYE date wins")', /assessFye\(parseTwCycles\(rows\)\.cycles\)/.test(lfSync) && !/latestFyeIso/.test(lfSync));
+
+console.log('\n--- a TeamWork cycle that cannot be real: ORBITEZ\'s leftover June 2025 AGM (Vincent: "ORBITEZ 就按照最新的跑") ---');
+// ORBITEZ PTE. LTD.'s AGM/AR list exactly as TeamWork returned it on 2026-10-10 (column 8 trimmed to the edit link)
+const edit = (id: number) => `<a target="_blank" href="https://apps.teamworkcss.com/tassure_asia/company_agm/edit_agm/${id}">Edit</a>`;
+const ORBITEZ_RAW: string[][] = [
+  ['AGM', '2025', '31/12/2025', null as unknown as string, '30/06/2026', '', '', '25/01/2026<br>', edit(7519)],
+  ['AGM', '2025', '30/06/2025', null as unknown as string, '30/12/2025', '', '', '27/07/2025<br>', edit(8033)],
+  ['AR', '2025', '31/12/2025', null as unknown as string, '31/07/2026', '', '', '', edit(7520)],
+  ['AGM', '2024', '31/12/2024', null as unknown as string, '30/06/2025', '01/09/2025', '01/09/2025', '25/01/2025<br>', edit(6821)],
+  ['AGM', '2024', '30/06/2024', '01/09/2025', '31/12/2024', '31/12/2024', '31/12/2024', '28/07/2024<br>', edit(5258)],
+  ['AR', '2024', '31/12/2024', '01/09/2025', '31/07/2025', '01/09/2025', '01/09/2025', '', edit(6822)],
+  ['AR', '2024', '30/06/2024', null as unknown as string, '31/01/2025', '31/12/2024', '23/01/2025', '', edit(5300)],
+  ['AGM', '2023', '30/06/2023', null as unknown as string, '31/12/2023', '31/12/2023', '31/12/2023', '28/07/2023<br>', edit(2603)],
+  ['AR', '2023', '30/06/2023', null as unknown as string, '31/01/2024', '31/12/2023', '09/01/2024', '', edit(2604)],
+  ['AGM', '2021', '30/06/2022', null as unknown as string, '31/12/2022', '31/12/2022', '31/12/2022', '28/07/2022<br>', edit(2601)],
+  ['AR', '2021', '30/06/2022', null as unknown as string, '31/01/2023', '31/12/2022', '16/01/2023', '', edit(2602)],
+];
+const orb = parseTwCycles(ORBITEZ_RAW).cycles;
+const found = findLeftoverCycles(orb);
+check('ORBITEZ: exactly ONE leftover — the AGM for FYE 30/06/2025 — with TeamWork\'s event number to delete', found.length === 1 && found[0].fyeIso === '2025-06-30' && found[0].agmEventId === 8033 && found[0].dueIso === '2025-12-30', found);
+check('...anchored on the filed December 2024 year and the December 2025 cycle one year later', found[0]?.anchorFye === '2024-12-31' && found[0]?.nextFye === '2025-12-31', found[0]);
+check('the company\'s FYE month stays December (the latest cycle decides, the leftover does not)', assessFye(orb).month === 'December');
+check('the leftover\'s FYE date is what the callers skip', leftoverFyeDates(ORBITEZ_RAW).has('2025-06-30') && leftoverFyeDates(ORBITEZ_RAW).size === 1);
+check('the real cycles are untouched: 31/12/2025 is still open and keeps both events', (() => { const c = orb.find(x => x.fyeIso === '2025-12-31'); return !!c && c.hasAgm && c.hasAr && !c.agmDone && !c.arDone; })());
+
+const cx = (fyeIso: string, o: Partial<TwCycle> & { filed?: boolean } = {}): TwCycle => ({
+  fyeIso, yearLabel: Number(fyeIso.slice(0, 4)), hasAgm: true, hasAr: true, agmDone: !!o.filed, arDone: !!o.filed, dueIso: null, uncertain: false, extended: false, agmEventId: null, ...o,
+});
+const agmOnly = (fyeIso: string, o: Partial<TwCycle> = {}) => cx(fyeIso, { hasAr: false, ...o });
+const baseYear = [cx('2023-12-31', { filed: true }), cx('2024-12-31', { filed: true })];
+const lo = (list: TwCycle[]) => findLeftoverCycles(list).map(l => l.fyeIso).join();
+check('the same shape but the June 2025 cycle HAS an AR event -> a real period, never ignored', lo([...baseYear, cx('2025-06-30'), cx('2025-12-31')]) === '');
+check('...it was held or filed -> never ignored', lo([...baseYear, agmOnly('2025-06-30', { agmDone: true }), cx('2025-12-31')]) === '');
+check('...an EOT was applied to it -> never ignored', lo([...baseYear, agmOnly('2025-06-30', { extended: true }), cx('2025-12-31')]) === '');
+check('...its cell is unreadable (uncertain) -> never ignored', lo([...baseYear, agmOnly('2025-06-30', { uncertain: true }), cx('2025-12-31')]) === '');
+check('...the year before it was NOT filed (only the AGM was held) -> TeamWork cannot prove the leftover is fake', lo([cx('2023-12-31', { filed: true }), cx('2024-12-31', { agmDone: true }), agmOnly('2025-06-30'), cx('2025-12-31')]) === '');
+check('an 18-month transition with a stray AGM (the earlier filed cycle is in JUNE) is only reported, never ignored', lo([cx('2023-06-30', { filed: true }), cx('2024-06-30', { filed: true }), agmOnly('2025-06-30'), cx('2025-12-31')]) === '');
+check('a genuine change of FYE with an unfiled old-month year (both events) is never ignored', lo([cx('2023-06-30', { filed: true }), cx('2024-06-30'), cx('2024-12-31')]) === '');
+check('no cycle one year after the anchor yet -> nothing to sit inside, never ignored', lo([...baseYear, agmOnly('2025-06-30')]) === '');
+check('the next cycle in the company\'s month is NOT exactly one year after the anchor (a longer period) -> never ignored', lo([...baseYear, agmOnly('2025-06-30'), cx('2026-12-31')]) === '');
+check('DIN FUNG / HUO SHAN / SHOU HANG / XPEL shape: an AGM-only next-year cycle in the company\'s OWN month is not a leftover', lo([cx('2024-06-30', { filed: true }), cx('2025-06-30', { filed: true }), agmOnly('2026-06-30')]) === '');
+check('a single cycle, or no cycle, is never a leftover', lo([agmOnly('2025-06-30')]) === '' && lo([]) === '');
+check('two stray AGMs inside the same filed year are both found', lo([...baseYear, agmOnly('2025-03-31'), agmOnly('2025-06-30'), cx('2025-12-31')]) === '2025-03-31,2025-06-30');
+check('the leftover cannot MOVE the FYE month: delete ORBITEZ\'s real 31/12/2025 cycle by mistake and the company is still December', (() => {
+  const wrong = parseTwCycles(ORBITEZ_RAW.filter(r => r[2] !== '31/12/2025')).cycles;
+  const a = assessFye(wrong);
+  return a.month === 'December' && a.suspects.some(s => s.kind === 'agm-only' && s.fyeIso === '2025-06-30');
+})());
+check('an AGM-only cycle in the SAME month as the company is accepted as before (it moves nothing)', assessFye([cx('2024-06-30', { filed: true }), cx('2025-06-30', { filed: true }), agmOnly('2026-06-30')]).month === 'June');
+check('a company\'s first cycle decides even if it has only an AGM event', assessFye([agmOnly('2026-03-31')]).month === 'March');
+
+const reminder = leftoverReminder(found[0]);
+check('the reminder staff see names the FYE and the TeamWork event to delete, in English and Chinese', /30\/06\/2025/.test(reminder) && /event 8033/.test(reminder) && /不存在/.test(reminder) && /delete it in TeamWork/.test(reminder), reminder);
+check('...and can never be mistaken for an overdue count or a strike-off note (lib/late-filing-categorize.ts reads those)', !/Overdue\s+\d/i.test(reminder) && !/STRIKE OFF/i.test(reminder) && reminder.length < 200, reminder);
+check('...Late Filing\'s own category for the row is unchanged by it', categorizeLateFilingRow({ remarks: `AUTO: Overdue 102 days; ${reminder}`, next_agm_due_date: '2026-06-30' } as never) === 'recent');
+const long = leftoverExceptionMessage('ORBITEZ PTE. LTD.', found[0]);
+check('Vincent\'s exception says, in Chinese first, which row to delete, which to leave alone and that it clears itself', /30\/06\/2025/.test(long) && /31\/12\/2025/.test(long) && /8033/.test(long) && /只删/.test(long) && /自动消失/.test(long) && /Delete only that AGM event/.test(long), long);
+
+console.log('\n--- the one definition is used by every path that derives "what is outstanding" ---');
+const srcOf = (f: string) => readFileSync(f, 'utf8');
+const lfSync2 = srcOf('app/api/late-filing/sync/route.ts');
+const wfSync = srcOf('app/api/ar-reminder/sync-workflow/route.ts');
+const genSrc = srcOf('app/api/ar-reminder/generate/route.ts');
+check('Late Filing sync drops the leftover events at the single place rows enter, behind a breaker (more than 3 companies -> ignore none)', /findLeftoverCycles\(parseTwCycles\(ev\.rows/.test(lfSync2) && /leftoverAll\.size > MAX_LEFTOVER_COMPANIES_PER_RUN/.test(lfSync2) && /allRows\.filter\(row => !leftoverFyes\.has\(parseDmyStrict/.test(lfSync2) && /'leftover_rule_tripped'/.test(lfSync2));
+check('...and writes the reminder into the AUTO reasons (so it reaches the Late Filing page and the AR row\'s LATE FILING line)', /for \(const l of leftover\) reasons\.push\(leftoverReminder\(l\)\)/.test(lfSync2));
+check('sync-workflow skips it for Master List\'s Next AGM Due, the FYE-change backfill and the plan, and raises Vincent\'s exception', /!leftoverFyes\.has\(fyeDate\)\) unheldAgmCandidates/.test(wfSync) && /leftoverFyes\.has\(evFyeIso\)/.test(wfSync) && /leftoverDates: leftoverFyes/.test(wfSync) && /'teamwork_leftover_cycle'/.test(wfSync));
+check('generate\'s catch-up never picks it as the earliest open cycle', /leftoverFyeDates\(result\.data/.test(genSrc) && /leftoverFyes\.has\(fyeDate\)/.test(genSrc));
+const defs = ['app', 'lib'].flatMap(d => { const out: string[] = []; const walk = (p: string) => { for (const e of readdirSync(p, { withFileTypes: true })) { const f = `${p}/${e.name}`; if (e.isDirectory()) walk(f); else if (/\.(ts|tsx)$/.test(e.name) && /function findLeftoverCycles/.test(readFileSync(f, 'utf8'))) out.push(f); } }; walk(d); return out; });
+check('exactly ONE definition of the rule exists', defs.length === 1 && defs[0].endsWith('lib/ar-fye-resolve.ts'), defs);
 
 if (failed) { console.log(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nALL OK');

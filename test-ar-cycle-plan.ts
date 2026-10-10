@@ -80,6 +80,16 @@ check('TeamWork\'s year label may differ from the FYE\'s calendar year (14 of 1,
 check('a row with the right month and year but another date is reported as drift, not duplicated', (() => { const p = plan([row(61, 'September', 2026, '2026-09-29')], beautyCycles); return !p.wanted.length && p.reports.some(r => r.kind === 'date-drift'); })());
 check('nearestYearOf picks the closest occurrence of the month', nearestYearOf('September', '2026-10-31') === 2026 && nearestYearOf('December', '2026-01-31') === 2025 && nearestYearOf('January', '2026-12-31') === 2027);
 
+console.log('\n--- a TeamWork leftover cycle (INV-AR-021 (7)): followed past, never wanted, reported ---');
+{
+  const withOtherMonth = [cyc('2025-12-31', true), cyc('2026-06-30'), cyc('2026-12-31')];
+  const without = plan([], withOtherMonth, 'December');
+  const flagged = plan([], withOtherMonth, 'December', 'December', { leftoverDates: new Set(['2026-06-30']) });
+  check('without the rule an open other-month cycle is only reported as "other-month"', without.reports.some(r => r.kind === 'other-month-cycle' && r.fyeIso === '2026-06-30'));
+  check('with it the cycle is reported as a LEFTOVER and is neither wanted nor reported twice', flagged.reports.some(r => r.kind === 'leftover-cycle' && r.fyeIso === '2026-06-30') && !flagged.reports.some(r => r.kind === 'other-month-cycle') && !flagged.wanted.some(w => w.cycleFye === '2026-06-30'));
+  check('the real December cycle is still wanted', flagged.wanted.map(w => w.cycleFye).join() === '' || flagged.wanted.every(w => w.cycleFye !== '2026-06-30'));
+}
+
 console.log('\n--- read-only by construction ---');
 const src = readFileSync('lib/ar-cycle-plan.ts', 'utf8').replace(/\/\/.*$/gm, '');
 check('the planner imports only pure modules and has no database or network call', !/supabase|fetch\(|\.from\(|\.update\(|\.insert\(|\.upsert\(|\.delete\(/.test(src) && !/from '\.\/(supabase|automation-sync)'/.test(src));

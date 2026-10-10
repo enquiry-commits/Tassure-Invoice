@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { createAdminClient } from '../lib/supabase';
 import { fetchAgmList, getSessionCookie, parseDmy, parseLatestDmy } from '../lib/teamwork-agm';
-import { MONTHS, assessFye, parseTwCycles } from '../lib/ar-fye-resolve';
+import { MONTHS, assessFye, findLeftoverCycles, parseDmyStrict, parseTwCycles } from '../lib/ar-fye-resolve';
 import { effectiveFyeForCompany, loadManualFyeByUen } from '../lib/ar-fye-manual';
 import { planCompanyAr, type PlanRow } from '../lib/ar-cycle-plan';
 import { executeArPlans, type PlanItem } from '../lib/ar-plan-apply';
@@ -55,6 +55,7 @@ const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP
   const planItems: PlanItem[] = [];
   const planReports: string[] = [];
   const lfDiffs: string[] = [];
+  const leftoverList: string[] = [];
   const lfSame: string[] = [];
   let fetched = 0, fetchErrors = 0;
   let next = 0;
@@ -68,10 +69,15 @@ const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP
       }
       if (!history) { fetchErrors++; continue; }
       fetched++;
-      const rows = history.data ?? [];
+      const allRows = history.data ?? [];
+      // INV-AR-021 (7): TeamWork leftovers (findLeftoverCycles, the one definition) are dropped exactly as the Late Filing sync drops them
+      const leftover = findLeftoverCycles(parseTwCycles(allRows).cycles);
+      const leftoverFyes = new Set(leftover.map(l => l.fyeIso));
+      for (const l of leftover) leftoverList.push(`${c.company_name} | AGM for FYE ${l.fyeIso} (due ${l.dueIso ?? '-'}, TeamWork event ${l.agmEventId ?? '?'}) inside the ${l.anchorFye} -> ${l.nextFye} year`);
+      const rows = leftoverFyes.size ? allRows.filter(r => !leftoverFyes.has(parseDmyStrict(String(r[2] ?? '')) ?? '')) : allRows;
 
       // (1) every date-shaped text in every cell of every row: does it exist, and what does the lenient parser make of it?
-      for (const row of rows) {
+      for (const row of allRows) {
         for (let col = 0; col < row.length; col++) {
           const text = String(row[col] ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           for (const m of text.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)) {
@@ -85,12 +91,12 @@ const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP
       }
 
       // (3) the nightly plan, with details
-      const parsed = parseTwCycles(rows);
+      const parsed = parseTwCycles(allRows);
       const gate = assessFye(parsed.cycles);
       const eff = effectiveFyeForCompany(c, manualByUen, gate.month);
       if (eff.effective && parsed.cycles.length) {
         const planRows = [...(byCompany.get(c.id) ?? []), ...(byName.get(String(c.company_name).trim().toUpperCase()) ?? []).filter(r => r.company_id == null)];
-        const plan = planCompanyAr({ company: { id: c.id, name: c.company_name }, effectiveMonth: eff.effective, teamworkMonth: eff.teamworkMonth, cycles: parsed.cycles, suspectDates: new Set(gate.suspects.map(x => x.fyeIso)), rows: planRows, today });
+        const plan = planCompanyAr({ company: { id: c.id, name: c.company_name }, effectiveMonth: eff.effective, teamworkMonth: eff.teamworkMonth, cycles: parsed.cycles, suspectDates: new Set(gate.suspects.map(x => x.fyeIso)), leftoverDates: leftoverFyes, rows: planRows, today });
         planItems.push({ company: { id: c.id, name: c.company_name }, plan });
         for (const rep of plan.reports) {
           if (rep.kind === 'date-drift') planReports.push(`date-drift | ${c.company_name} | row #${rep.rowId} has fye_date ${rep.rowDate}, TeamWork's cycle is ${rep.slotDate}`);
@@ -174,6 +180,9 @@ const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP
   console.log(`\n=== (4) Late Filing: overdue cycles where the NEW exact-date mirror differs from the OLD guess (${lfDiffs.length}); same (${lfSame.length}) ===`);
   lfDiffs.forEach(l => console.log('  DIFFERENT: ' + l));
   lfSame.forEach(l => console.log('  same:      ' + l));
+
+  console.log(`\n=== (4b) TeamWork leftover cycles the system now ignores (${leftoverList.length}) ===`);
+  leftoverList.forEach(l => console.log('  ' + l));
 
   console.log('\n=== (5) recent runs and open exceptions that could be related ===');
   const { data: runs } = await sb.from('automation_sync_runs').select('*').in('source', ['teamwork_nd_1', 'teamwork_nd_2', 'teamwork_nd_3', 'teamwork_nd_4', 'teamwork_nd_5', 'ar_generate', 'ar_workflow', 'late_filing']).order('started_at', { ascending: false }).limit(24);

@@ -9,7 +9,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { toDateStr, addMonths } from '@/lib/date';
 import { isTeamworkActiveCompany } from '@/lib/company-lifecycle';
-import { MONTHS as FYE_MONTHS, assessFye, parseTwCycles, type BadCell, type SuspectCycle } from '@/lib/ar-fye-resolve';
+import { MONTHS as FYE_MONTHS, assessFye, findLeftoverCycles, leftoverExceptionMessage, parseTwCycles, type BadCell, type LeftoverCycle, type SuspectCycle } from '@/lib/ar-fye-resolve';
 import { loadManualFyeByUen, effectiveFyeForCompany, type ManualFyeEntry } from '@/lib/ar-fye-manual';
 import { planCompanyAr, type PlanRow } from '@/lib/ar-cycle-plan';
 import { executeArPlans, emptyOutcome, type PlanItem, type PlanOutcome } from '@/lib/ar-plan-apply';
@@ -356,6 +356,7 @@ async function syncArWorkflow(req: NextRequest) {
   // Skipped only when the plan is really being applied tonight (see AR_PLAN_APPLY) — otherwise the old edge-triggered blocks stay.
   const legacyFyeCorrection = !(AR_PLAN_APPLY && planEnabled);
   const fyeSuspects: Array<SuspectCycle & { companyId: number; company: string }> = [];
+  const leftoverFound: Array<LeftoverCycle & { companyId: number; company: string }> = [];
   const badCells: Array<BadCell & { companyId: number; company: string }> = [];
   const planItems: PlanItem[] = [];
   const overrideDiffs: Array<{ companyId: number; company: string; masterListMonth: string; teamworkMonth: string | null; by: string | null; at: string | null }> = [];
@@ -410,6 +411,13 @@ async function syncArWorkflow(req: NextRequest) {
     // could belong to a future, not-yet-filed cycle); Next AGM Due Date is the
     // Due Date of the nearest not-yet-held AGM (the soonest deadline, so a
     // company with more than one overdue year still gets the most urgent one).
+    // INV-AR-021 (7): cycles TeamWork left behind that cannot be real (lib/ar-fye-resolve.ts findLeftoverCycles — the ONE definition;
+    // ORBITEZ's AGM for FYE 30/06/2025 with no AR event inside its filed Dec 2024 -> Dec 2025 year) are skipped by FYE date wherever
+    // this iteration derives "what is outstanding": Master List's Next AGM Due, the FYE-change backfill, the nightly plan. Vincent:
+    // "ORBITEZ 就按照最新的跑，但是可以有一个提醒在系统" — the reminder is the exception raised below and the Late Filing remark.
+    const leftoverCycles = findLeftoverCycles(parseTwCycles(result.data ?? []).cycles);
+    const leftoverFyes = new Set(leftoverCycles.map(l => l.fyeIso));
+
     const uen = uenByInternalId.get(companyId);
     if (uen) {
       const acRow = activeClientByUen.get(uen);
@@ -432,7 +440,7 @@ async function syncArWorkflow(req: NextRequest) {
               // "<strike>ORIGINAL</strike> <br> REVISED" — see
               // lib/teamwork-agm.ts's own comment (2026-08-28).
               const due = toIsoDate(parseLatestDmy(dueRaw));
-              if (due && fyeDate) unheldAgmCandidates.push({ fyeDate, due });
+              if (due && fyeDate && !leftoverFyes.has(fyeDate)) unheldAgmCandidates.push({ fyeDate, due });
             }
           } else if (event === 'AR') {
             const filing = toIsoDate(parseDmy(filingRaw));
@@ -505,6 +513,7 @@ async function syncArWorkflow(req: NextRequest) {
       const fyeAssessment = assessFye(twParsed.cycles);
       const companyLabel = companyById.get(companyInfo.id)?.company_name ?? String(companyInfo.id);
       for (const s of fyeAssessment.suspects) fyeSuspects.push({ companyId: companyInfo.id, company: companyLabel, ...s });
+      for (const l of leftoverCycles) leftoverFound.push({ companyId: companyInfo.id, company: companyLabel, ...l });
       for (const b of twParsed.bad) badCells.push({ companyId: companyInfo.id, company: companyLabel, ...b });
       const latestFyeMonthIdx: number | null = fyeAssessment.month ? FYE_MONTHS.indexOf(fyeAssessment.month as typeof FYE_MONTHS[number]) : null;
       if (latestFyeMonthIdx !== null && latestFyeMonthIdx >= 0) {
@@ -587,7 +596,7 @@ async function syncArWorkflow(req: NextRequest) {
                 const [ev0, ev1, ev2, , , ev5, ev6] = ev;
                 if (ev0 !== 'AGM' && ev0 !== 'AR') continue;
                 const evFyeIso = toIsoDate(parseDmy(ev2));
-                if (!evFyeIso) continue;
+                if (!evFyeIso || leftoverFyes.has(evFyeIso)) continue;
                 if (!openCycles.has(evFyeIso)) openCycles.set(evFyeIso, { yearLabel: ev1, agmDone: false, arDone: false });
                 const evDone = !!(toIsoDate(parseDmy(ev5)) || toIsoDate(parseDmy(ev6)));
                 const g = openCycles.get(evFyeIso)!;
@@ -698,7 +707,7 @@ async function syncArWorkflow(req: NextRequest) {
             plan: planCompanyAr({
               company: { id: companyInfo.id, name },
               effectiveMonth: eff.effective, teamworkMonth: eff.teamworkMonth,
-              cycles: twParsed.cycles, suspectDates: new Set(fyeAssessment.suspects.map(s => s.fyeIso)),
+              cycles: twParsed.cycles, suspectDates: new Set(fyeAssessment.suspects.map(s => s.fyeIso)), leftoverDates: leftoverFyes,
               rows: rowsOfCompany, today: todayIso,
             }),
           });
@@ -824,6 +833,11 @@ async function syncArWorkflow(req: NextRequest) {
       key: `${s.companyId}:${s.fyeIso}`, name: s.company,
       details: { company_id: s.companyId, fye_date: s.fyeIso, kind: s.kind, message: `TeamWork has a cycle dated ${s.fyeIso} that looks like a keying slip. AR ignored it and keeps the company's FYE month. Correct the date in TeamWork. (${s.note})` },
     })), grace);
+    // INV-AR-021 (7) — Vincent's reminder for a TeamWork cycle that cannot be real (he reads this register; staff get the Late Filing remark).
+    await replaceAutomationExceptions('ar_workflow', 'teamwork_leftover_cycle', leftoverFound.map(l => ({
+      key: `${l.companyId}:${l.fyeIso}`, name: l.company,
+      details: { company_id: l.companyId, fye_date: l.fyeIso, due_date: l.dueIso, agm_event_id: l.agmEventId, message: leftoverExceptionMessage(l.company, l) },
+    })), grace);
     await replaceAutomationExceptions('ar_workflow', 'fye_master_list_differs', overrideDiffs.map(d => ({
       key: String(d.companyId), name: d.company,
       details: { company_id: d.companyId, master_list_fye: d.masterListMonth, teamwork_fye: d.teamworkMonth, edited_by: d.by, edited_at: d.at, message: `AR Reminder follows the FYE month typed in Master List (${d.masterListMonth}), because staff edited it by hand; TeamWork shows ${d.teamworkMonth ?? 'another month'}. Make TeamWork match, or change the Master List FYE.` },
@@ -865,6 +879,8 @@ async function syncArWorkflow(req: NextRequest) {
         blocked: head(planOutcome.blocked), failed: head(planOutcome.failed),
       },
     },
+    teamwork_leftover_cycles: leftoverFound.length,
+    teamwork_leftover_examples: head(leftoverFound.map(l => ({ company: l.company, fye_date: l.fyeIso, agm_event_id: l.agmEventId }))),
     fye_slip_cycles: fyeSuspects.length,
     fye_slip_examples: head(fyeSuspects.map(s => ({ company: s.company, fye_date: s.fyeIso, kind: s.kind }))),
     fye_master_list_differs: overrideDiffs.length,

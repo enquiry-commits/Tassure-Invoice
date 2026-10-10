@@ -106,6 +106,8 @@ export type TwCycle = {
   agmDone: boolean; arDone: boolean;   // a held date / a filing date is present
   dueIso: string | null;         // the latest due date shown (an EOT shows the old and the new)
   uncertain: boolean;            // a held/filing cell has text that is not a real date — never decide on this cycle
+  extended?: boolean;            // the due date shows a struck-through original: an EOT was applied
+  agmEventId?: number | null;    // TeamWork's id of the AGM event (the number in its edit_agm/<id> link) — what a person deletes there
 };
 export type BadCell = { column: 'fye' | 'due' | 'held' | 'filing'; raw: string; event: string; yearLabel: string };
 
@@ -142,6 +144,8 @@ export function parseTwCycles(rows: readonly (readonly string[])[]): { cycles: T
     const doneRaw = String(event === 'AGM' ? row[5] ?? '' : row[6] ?? '');
     const done = parseDmyStrict(doneRaw);
     if (event === 'AGM') cycle.hasAgm = true; else cycle.hasAr = true;
+    if (/<strike|<s>|<del/i.test(String(row[4] ?? ''))) cycle.extended = true;
+    if (event === 'AGM') { const id = /edit_agm\/(\d+)/.exec(String(row[8] ?? '')); if (id) cycle.agmEventId = Number(id[1]); }
     if (done) { if (event === 'AGM') cycle.agmDone = true; else cycle.arDone = true; }
     else if (hasDateShape(doneRaw)) { cycle.uncertain = true; note(event === 'AGM' ? 'held' : 'filing', doneRaw); }
   }
@@ -149,7 +153,7 @@ export function parseTwCycles(rows: readonly (readonly string[])[]): { cycles: T
 }
 
 // ── the FYE month TeamWork implies ──────────────────────────────────────────────────────────────────────────────────
-export type SuspectCycle = { fyeIso: string; kind: 'slip' | 'odd-day'; note: string };
+export type SuspectCycle = { fyeIso: string; kind: 'slip' | 'odd-day' | 'agm-only'; note: string };
 
 /**
  * The month of the company's FYE according to its TeamWork cycles: the month of the LATEST cycle, unless that cycle looks like a
@@ -170,6 +174,13 @@ export function assessFye(cycles: readonly TwCycle[]): { month: string | null; s
     const doneOlder = [...older].reverse().find(isDoneCycle);
     const established = doneOlder ? monthOfIso(doneOlder.fyeIso) : modeMonth(older);
     if (month === established || isDoneCycle(c)) return { month, suspects };
+    // An AGM event with no AR event beside it is not a financial period TeamWork can vouch for (a real one carries both; 3,057 of
+    // 3,063 live cycles do). It may never MOVE the FYE month — ORBITEZ's leftover June 2025 AGM would otherwise flip a December
+    // company to June the day someone deletes the wrong one of the two rows both labelled "2025" (council, 2026-10-10).
+    if (c.hasAgm && !c.hasAr) {
+      suspects.push({ fyeIso: c.fyeIso, kind: 'agm-only', note: `${c.fyeIso} has an AGM event but no AR event and is in ${month}, not ${established} — it cannot move the FYE month` });
+      continue;
+    }
     const slipOf = older.find(o => {
       if (monthOfIso(o.fyeIso) === month) return false;
       const years = isoParts(c.fyeIso).y - isoParts(o.fyeIso).y;
@@ -195,6 +206,79 @@ function modeMonth(cycles: readonly TwCycle[]): string {
   // ties go to the most recent of the tied months (the cycles are in date order)
   for (const c of cycles) { const m = monthOfIso(c.fyeIso); const k = count.get(m)!; if (k >= n) { best = m; n = k; } }
   return best;
+}
+
+// ── a cycle TeamWork left behind that cannot be real ────────────────────────────────────────────────────────────────
+export type LeftoverCycle = {
+  fyeIso: string; dueIso: string | null; month: string;
+  agmEventId: number | null;            // the AGM event a person deletes in TeamWork
+  anchorFye: string; nextFye: string;   // the filed cycle before it and the same-month cycle one year later
+  note: string;
+};
+/** How many companies one run may find with a leftover before the rule is treated as suspect and ignores NONE (the Late Filing sync). */
+export const MAX_LEFTOVER_COMPANIES_PER_RUN = 3;
+
+/**
+ * An OPEN cycle that cannot be a real financial period, so the system follows the latest cycle instead (Vincent, 2026-10-10:
+ * "ORBITEZ 就按照最新的跑，但是可以有一个提醒在系统"). Deliberately NARROW — the 4-seat council (Singapore company secretary,
+ * Skeptic, Pragmatist, Operator) rejected the broad "other month + a later cycle" rule because it would drop a genuinely unfiled
+ * old-month year. ALL of these must hold:
+ *   1. it is open (no AGM held, no AR filed, no unreadable cell) and no EOT was applied to it;
+ *   2. it has an AGM event but NO AR event — a real period carries both (3,057 of 3,063 live cycles), and ACRA's AR is what every
+ *      later cycle hangs on;
+ *   3. its month is not the company's FYE month (assessFye);
+ *   4. the latest earlier cycle in the company's month whose AR was FILED (A) exists, and the same-month cycle exactly one year later
+ *      (B, within 3 days) exists with both events — so it sits INSIDE a 12-month year that TeamWork itself records, and a
+ *      company may change its financial year end only from its current or immediately previous one, never inside a filed year.
+ * ORBITEZ: A = 31/12/2024 (AR filed 01/09/2025), B = 31/12/2025, leftover = the AGM for FYE 30/06/2025 (event 8033). Everything
+ * else that merely looks odd (an 18-month transition, a first financial year, a held or filed cycle, an LLP, a restored shell) stays
+ * counted and is only reported. One definition: Late Filing, Master List's next AGM due, the AR plan and generate's catch-up all call this.
+ */
+export function findLeftoverCycles(cycles: readonly TwCycle[]): LeftoverCycle[] {
+  const sorted = [...cycles].sort((a, b) => a.fyeIso.localeCompare(b.fyeIso));
+  const assessed = assessFye(sorted);
+  const month = assessed.month;
+  if (!month) return [];
+  const slipDates = new Set(assessed.suspects.map(s => s.fyeIso));
+  const out: LeftoverCycle[] = [];
+  for (const c of sorted) {
+    if (!isOpenCycle(c) || c.extended || !c.hasAgm || c.hasAr || monthOfIso(c.fyeIso) === month) continue;
+    const anchor = [...sorted].reverse().find(p => p.fyeIso < c.fyeIso && monthOfIso(p.fyeIso) === month && p.hasAgm && p.hasAr && p.arDone);
+    if (!anchor) continue;
+    const oneYear = addYearsIso(anchor.fyeIso, 1);
+    const next = sorted.find(n => n.fyeIso > c.fyeIso && monthOfIso(n.fyeIso) === month && n.hasAgm && n.hasAr && !slipDates.has(n.fyeIso) && Math.abs(daysBetweenIso(n.fyeIso, oneYear)) <= SLIP_TOLERANCE_DAYS);
+    if (!next) continue;
+    out.push({
+      fyeIso: c.fyeIso, dueIso: c.dueIso, month: monthOfIso(c.fyeIso), agmEventId: c.agmEventId ?? null, anchorFye: anchor.fyeIso, nextFye: next.fyeIso,
+      note: `AGM event${c.agmEventId ? ` ${c.agmEventId}` : ''} for FYE ${c.fyeIso} (${monthOfIso(c.fyeIso)}) has no AR event and sits inside the ${month} year ${anchor.fyeIso} -> ${next.fyeIso}, whose AR was filed — it cannot be a real period`,
+    });
+  }
+  return out;
+}
+
+/** The FYE dates (YYYY-MM-DD) of the leftover cycles in a raw TeamWork AGM list, ready to skip their events by date. */
+export function leftoverFyeDates(rows: readonly (readonly string[])[]): Set<string> {
+  return new Set(findLeftoverCycles(parseTwCycles(rows).cycles).map(l => l.fyeIso));
+}
+
+const ddmmyyyy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/**
+ * The short reminder that goes into Late Filing's remark — and from it, through the reconciliation pass, into the AR Reminder row's
+ * "⚠ LATE FILING" line and its LATE badge tooltip: the places staff actually look (the Dashboard's exception register is Vincent-only).
+ * It must never contain "Overdue N days" (lib/late-filing-categorize.ts reads the first one) or "STRIKE OFF".
+ */
+export function leftoverReminder(l: LeftoverCycle): string {
+  const id = l.agmEventId ? `, event ${l.agmEventId}` : '';
+  return `TeamWork has an extra AGM for FYE ${ddmmyyyy(l.fyeIso)}${id} that cannot exist - ignored, delete it in TeamWork / TeamWork 里多了一条不存在的 AGM（FYE ${ddmmyyyy(l.fyeIso)}），已忽略，请删除`;
+}
+
+/** The full message for Vincent's exception register (Chinese first, then English). */
+export function leftoverExceptionMessage(company: string, l: LeftoverCycle): string {
+  const id = l.agmEventId ? `，事件号 ${l.agmEventId}` : '';
+  const due = l.dueIso ? `，到期 ${ddmmyyyy(l.dueIso)}` : '';
+  return `TeamWork 里 ${company} 多了一条不存在的 AGM（FYE ${ddmmyyyy(l.fyeIso)}${due}，没有对应的 AR${id}）。这家公司 ${ddmmyyyy(l.anchorFye)} 那一年的 AR 已经递交，下一年度是 ${ddmmyyyy(l.nextFye)}，一个已递交的年度中间不可能再有 ${Number(l.fyeIso.slice(5, 7))} 月年结。系统已忽略这一条，按最新的 FYE ${ddmmyyyy(l.nextFye)} 跟进（Late Filing 和 Master List 的 Next AGM Due 都不再用它）。请在 TeamWork 把它删掉：只删 FYE ${ddmmyyyy(l.fyeIso)} 那条，不要动 ${ddmmyyyy(l.nextFye)}，也不要填假的开会日期；删掉后这条提醒会自动消失。`
+    + ` / TeamWork lists an AGM for FYE ${ddmmyyyy(l.fyeIso)} with no AR event inside ${company}'s filed year ${ddmmyyyy(l.anchorFye)} -> ${ddmmyyyy(l.nextFye)}; it cannot be a real period. The system ignores it and follows FYE ${ddmmyyyy(l.nextFye)}. Delete only that AGM event in TeamWork (leave ${ddmmyyyy(l.nextFye)} alone; never key a fake held date). This reminder clears itself.`;
 }
 
 // ── what staff typed in Master List ─────────────────────────────────────────────────────────────────────────────────
