@@ -8,6 +8,9 @@ import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
 import { toIsoDateValue } from '@/lib/date';
 import { isActiveCssClient, isEndedMasterListType } from '@/lib/company-lifecycle';
 import { ilikeAny } from '@/lib/postgrest-or';
+import { loadLatestFyeAudits } from '@/lib/ar-fye-manual';
+import { manualFyeFromMaster, type FyeAudit } from '@/lib/ar-fye-resolve';
+import { reanchorAfterMasterListFyeEdit } from '@/lib/ar-fye-reanchor';
 
 // See app/api/ar-reminder/route.ts's identical comment (2026-09-14) — this
 // route was also missing region pinning next to Supabase's Tokyo project,
@@ -230,12 +233,17 @@ export async function GET(req: NextRequest) {
   // hand and can drift out of date.
   const renameByUen = type === 'name_change' ? new Map<string, { oldName: string; newName: string }>() : await loadRenameMap(supabase);
 
+  // Which Active Client FYE cells staff typed by hand: AR Reminder follows those over TeamWork's month (INV-AR-021). Read failure =
+  // none shown as deliberate (the tooltip then says AR follows TeamWork) — display only, AR itself reads this on its own.
+  const fyeAudits = type === 'active_client' ? await loadLatestFyeAudits(supabase).catch(() => new Map<number, FyeAudit>()) : new Map<number, FyeAudit>();
+
   const enriched = (data ?? []).map(r => {
     const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
     const rename = uen ? renameByUen.get(uen) : undefined;
     return {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
+      fye_manual: type === 'active_client' && !!manualFyeFromMaster({ fye: r.fye, manualFields: r.manual_fields, lastAudit: fyeAudits.get(r.id) ?? null }),
       in_teamwork: uen !== null && twUens.has(uen),
       is_css_client: uen ? (cssClientByUen.get(uen) ?? null) : null,
       css_client_inactive: uen ? (cssClientInactiveByUen.get(uen) ?? false) : false,
@@ -376,8 +384,17 @@ export async function PATCH(req: NextRequest) {
   const stored = BOOLEAN_FIELDS.has(field) ? !!value : (field === 'fye' ? fyeToAbbr(value || null) : (value || null));
   const prevStored = BOOLEAN_FIELDS.has(field) ? !!body.previousValue : (field === 'fye' ? fyeToAbbr(body.previousValue || null) : (body.previousValue || null));
   const needsRoc = field === 'acc_pic_override' || field === 'tax_pic_override';
-  const cols = field === 'roc_no' ? 'id,roc_no' : `id,roc_no,${field}`;
+  // An FYE edit also needs the row's list and its manual flags: AR Reminder follows a deliberate Master List month (INV-AR-021).
+  const cols = field === 'roc_no' ? 'id,roc_no' : `id,roc_no,${field}${field === 'fye' ? ',list_type,manual_fields' : ''}`;
   const updatedAt = new Date().toISOString();
+  // The cell's latest audit entry BEFORE this edit (the edit writes its own below) — tells whether the OLD value was deliberate.
+  let preFyeAudit: FyeAudit | null = null;
+  if (field === 'fye') {
+    const { data: a } = await supabase.from('audit_log').select('new_value, changed_by, changed_at')
+      .eq('table_name', 'master_list').eq('row_id', id).eq('field', 'fye')
+      .order('changed_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle();
+    if (a) preFyeAudit = { changedBy: a.changed_by as string | null, newValue: a.new_value as string | null, changedAt: a.changed_at as string | null };
+  }
 
   // Compare-and-swap on the field's own previous value — same technique
   // ar_reminder's PATCH already uses (see app/api/ar-reminder/route.ts),
@@ -471,5 +488,23 @@ export async function PATCH(req: NextRequest) {
     await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: field, p_manual: isManual });
   }
 
-  return NextResponse.json({ ok: true, updatedAt, updatedByName: account?.name ?? null });
+  // A staff-typed FYE is a DELIBERATE one: AR Reminder runs on it even while TeamWork shows another month, and moves AT ONCE
+  // (INV-AR-021). Clearing the cell hands AR back to TeamWork. The flag is a second record next to the audit entry (either one makes
+  // the value count as deliberate); the move below never fails the save — the nightly plan is the backstop.
+  let arFye: Awaited<ReturnType<typeof reanchorAfterMasterListFyeEdit>> | { error: string } | undefined;
+  if (field === 'fye' && prevStored !== stored) {
+    try {
+      await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: 'fye', p_manual: stored !== null ? true : null });
+    } catch { /* best effort — the audit entry above carries the same fact */ }
+    try {
+      arFye = await reanchorAfterMasterListFyeEdit(supabase, {
+        masterRow: { id, roc_no: (row.roc_no as string | null) ?? null, list_type: (row.list_type as string | null) ?? null, manual_fields: (row.manual_fields as Record<string, unknown> | null) ?? null },
+        previousValue: prevStored as string | null, newValue: stored as string | null, preAudit: preFyeAudit,
+      });
+    } catch (e) {
+      arFye = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  return NextResponse.json({ ok: true, updatedAt, updatedByName: account?.name ?? null, ...(arFye ? { arFye } : {}) });
 }

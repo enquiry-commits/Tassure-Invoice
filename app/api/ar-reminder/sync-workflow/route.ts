@@ -3,11 +3,16 @@ import { createAdminClient } from '@/lib/supabase';
 import { restoreFyeExcludedRows, newRestoreBudget, type Slot } from '@/lib/ar-fye-restore';
 import { parseDmy, parseLatestDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
-import { withAutomationRun } from '@/lib/automation-sync';
+import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { toDateStr, addMonths } from '@/lib/date';
+import { isTeamworkActiveCompany } from '@/lib/company-lifecycle';
+import { MONTHS as FYE_MONTHS, assessFye, parseTwCycles, type BadCell, type SuspectCycle } from '@/lib/ar-fye-resolve';
+import { loadManualFyeByUen, effectiveFyeForCompany, type ManualFyeEntry } from '@/lib/ar-fye-manual';
+import { planCompanyAr, type PlanRow } from '@/lib/ar-cycle-plan';
+import { executeArPlans, emptyOutcome, type PlanItem, type PlanOutcome } from '@/lib/ar-plan-apply';
 
 /**
  * Daily AR-workflow sync: fill ar_reminder rows' AGM/filing dates from
@@ -153,6 +158,16 @@ const MONTH_NAMES = [
 // running after this change (see PROJECT_STATUS.md).
 const WORK_DEADLINE_MS = 270_000;
 
+// INV-AR-021 — the nightly STATE-BASED plan (lib/ar-cycle-plan.ts): every night, for every active company, compare TeamWork's
+// open cycles with the company's AR rows and fix what differs (restore a row the system hid, insert a missing one, hide a ghost),
+// instead of correcting only at the moment fye_month changes. It ships in SHADOW mode: the plan is computed and recorded in this
+// run's summary (`ar_plan`) but changes nothing; one night's result is read, then this constant is flipped to true. When true the
+// edge-triggered "hide every unfiled old-month row" + "backfill the earliest open cycle" blocks below are skipped — the plan
+// replaces them (it keeps a real overdue cycle of the old month, which the old block hid).
+const AR_PLAN_APPLY = false;
+// How many example lines of each plan list go into the run summary (the counts are always complete).
+const PLAN_SUMMARY_EXAMPLES = 25;
+
 function abortError(signal: AbortSignal) {
   return signal.reason instanceof Error
     ? signal.reason
@@ -200,10 +215,12 @@ async function syncArWorkflow(req: NextRequest) {
   const { data: rows, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!rows?.length) return NextResponse.json({ ok: true, rows: 0, updated: 0 });
+  // A run limited to one cycle (?month=&year=) sees only part of the rows: it must not plan, or every other row would look missing.
+  const fullRun = !onlyMonth && !onlyYear;
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, company_name, internal_id, registration_no, fye_month, pic, sec_pic')
+    .select('id, company_name, internal_id, registration_no, fye_month, pic, sec_pic, is_active, tw_status')
     .not('internal_id', 'is', null);
 
   // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
@@ -249,6 +266,31 @@ async function syncArWorkflow(req: NextRequest) {
     if (!row.roc_no) continue;
     activeClientByUen.set(String(row.roc_no).trim().toUpperCase(), row);
   }
+  // INV-AR-021 inputs, read once per run: which Master List FYEs staff typed by hand (they win over TeamWork's month), and the
+  // rows the system or a person hid (the plan must see them to restore instead of colliding with their unique key). If any of this
+  // cannot be read the plan is simply not made tonight — it never plans on partial information.
+  let manualByUen = new Map<string, ManualFyeEntry>();
+  const excludedByCompany = new Map<number, PlanRow[]>();
+  const excludedByName = new Map<string, PlanRow[]>();
+  let planInputError: string | null = null;
+  if (fullRun) {
+    try {
+      manualByUen = await loadManualFyeByUen(supabase);
+      const { data: excluded, error: excludedError } = await supabase.from('ar_reminder')
+        .select('id, company_id, entity_name, fye_month, fye_year, fye_date, status, filling_date, agm_held_date')
+        .eq('status', 'Excluded');
+      if (excludedError) throw new Error(excludedError.message);
+      for (const r of (excluded ?? []) as PlanRow[]) {
+        if (r.company_id != null) (excludedByCompany.get(r.company_id) ?? excludedByCompany.set(r.company_id, []).get(r.company_id)!).push(r);
+        const nameKey = r.entity_name.trim().toUpperCase();
+        (excludedByName.get(nameKey) ?? excludedByName.set(nameKey, []).get(nameKey)!).push(r);
+      }
+    } catch (e) {
+      planInputError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  const planEnabled = fullRun && !planInputError;
+
   const idOf = (companyId: number | null, name: string): { id: string | null; ambiguous: boolean } => {
     if (companyId && internalByCompanyId.has(companyId)) return { id: internalByCompanyId.get(companyId)!, ambiguous: false };
     const direct = companyCandidates.filter(company => normalize(company.company_name) === normalize(name));
@@ -311,6 +353,13 @@ async function syncArWorkflow(req: NextRequest) {
   let fyeCorrectionBackfilled = 0, fyeCorrectionBackfillErrors = 0;
   const restoreBudget = newRestoreBudget(); // INV-AR-019: ONE circuit-breaker budget for the whole run (this loop calls once per company)
   const changes: { entity: string; patch: Record<string, string | null> }[] = [];
+  // Skipped only when the plan is really being applied tonight (see AR_PLAN_APPLY) — otherwise the old edge-triggered blocks stay.
+  const legacyFyeCorrection = !(AR_PLAN_APPLY && planEnabled);
+  const fyeSuspects: Array<SuspectCycle & { companyId: number; company: string }> = [];
+  const badCells: Array<BadCell & { companyId: number; company: string }> = [];
+  const planItems: PlanItem[] = [];
+  const overrideDiffs: Array<{ companyId: number; company: string; masterListMonth: string; teamworkMonth: string | null; by: string | null; at: string | null }> = [];
+  const todayIso = new Date().toISOString().slice(0, 10);   // UTC, like /generate's window
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
   // (up to MAX_CONCURRENCY 20) for the exact same fetchAgmList call. This
@@ -448,18 +497,17 @@ async function syncArWorkflow(req: NextRequest) {
     // earlier in the history, exactly what was silently trusted before.
     const companyInfo = companyByInternalId.get(companyId);
     if (companyInfo) {
-      let latestFyeIso: string | null = null;
-      let latestFyeMonthIdx: number | null = null;
-      for (const ev of result.data ?? []) {
-        const evFyeDate = parseDmy(ev[2]);
-        const evFyeIso = evFyeDate ? toIsoDate(evFyeDate) : null;
-        if (!evFyeDate || !evFyeIso) continue;
-        if (!latestFyeIso || evFyeIso > latestFyeIso) {
-          latestFyeIso = evFyeIso;
-          latestFyeMonthIdx = evFyeDate.getMonth();
-        }
-      }
-      if (latestFyeMonthIdx !== null) {
+      // INV-AR-021: the month TeamWork implies is that of the company's LATEST cycle — unless that cycle is a keying slip
+      // (BEAUTY ASSET: 01/10/2027 typed for 30/09/2027 flipped the FYE to October four times in August and each flip hid its
+      // real September row). Dates are read strictly: 31/09 is unreadable, not 1 October. A company whose TeamWork history gave
+      // no readable cycle keeps its month — an empty answer is never a change.
+      const twParsed = parseTwCycles(result.data ?? []);
+      const fyeAssessment = assessFye(twParsed.cycles);
+      const companyLabel = companyById.get(companyInfo.id)?.company_name ?? String(companyInfo.id);
+      for (const s of fyeAssessment.suspects) fyeSuspects.push({ companyId: companyInfo.id, company: companyLabel, ...s });
+      for (const b of twParsed.bad) badCells.push({ companyId: companyInfo.id, company: companyLabel, ...b });
+      const latestFyeMonthIdx: number | null = fyeAssessment.month ? FYE_MONTHS.indexOf(fyeAssessment.month as typeof FYE_MONTHS[number]) : null;
+      if (latestFyeMonthIdx !== null && latestFyeMonthIdx >= 0) {
         const correctMonth = MONTH_NAMES[latestFyeMonthIdx];
         if (correctMonth !== companyInfo.fye_month) {
           const { error: fyeErr } = await supabase.from('companies')
@@ -487,7 +535,8 @@ async function syncArWorkflow(req: NextRequest) {
             // pending under the stale month — a row that's already been
             // filed (filling_date set) is real history, not a phantom
             // future cycle, and must never be touched here.
-            const { data: staleRows, error: staleErr } = await supabase
+            // (skipped once the state-based plan is applied — it hides ghosts nightly and keeps a real overdue cycle of the old month)
+            const { data: staleRows, error: staleErr } = !legacyFyeCorrection ? { data: null, error: null } : await supabase
               .from('ar_reminder')
               .update({ status: 'Excluded', updated_by_email: 'system:teamwork', updated_by_name: 'TeamWork Sync (FYE corrected)' })
               .eq('company_id', companyInfo.id)
@@ -524,7 +573,8 @@ async function syncArWorkflow(req: NextRequest) {
             // requiring another manual sweep later. Reuses result.data
             // (this company's TeamWork history), already fetched this
             // iteration — no extra TeamWork call.
-            try {
+            // (skipped once the state-based plan is applied: it wants every open cycle nightly, not only at the moment of a change)
+            if (legacyFyeCorrection) try {
               // Same cross-referenced "is this cycle open" grouping
               // /generate's own catch-up now uses (2026-08-27 fix, after
               // the wrong conclusion it used to reach reading an AGM or AR
@@ -630,6 +680,32 @@ async function syncArWorkflow(req: NextRequest) {
         // app/api/master-list/route.ts and AUTO_SYNCED_FIELDS_UI in
         // components/MasterListTable.tsx, where 'fye' was removed to match.
       }
+
+      // INV-AR-021: tonight's state-based plan for this company. Pure — nothing is written here; executeArPlans runs after the
+      // loop. Skipped for a company that is not on the active corporate-secretarial roster (a terminated client gets no rows).
+      const planCompany = companyById.get(companyInfo.id);
+      if (planEnabled && planCompany && isTeamworkActiveCompany(planCompany)) {
+        const eff = effectiveFyeForCompany(planCompany, manualByUen, fyeAssessment.month);
+        if (eff.effective) {
+          const name = planCompany.company_name as string;
+          const rowsOfCompany: PlanRow[] = [
+            ...(companyRows as PlanRow[]),
+            ...(excludedByCompany.get(companyInfo.id) ?? []),
+            ...(excludedByName.get(name.trim().toUpperCase()) ?? []).filter(r => r.company_id == null),
+          ];
+          planItems.push({
+            company: { id: companyInfo.id, name },
+            plan: planCompanyAr({
+              company: { id: companyInfo.id, name },
+              effectiveMonth: eff.effective, teamworkMonth: eff.teamworkMonth,
+              cycles: twParsed.cycles, suspectDates: new Set(fyeAssessment.suspects.map(s => s.fyeIso)),
+              rows: rowsOfCompany, today: todayIso,
+            }),
+          });
+          const manual = manualByUen.get(String(planCompany.registration_no ?? '').trim().toUpperCase());
+          if (eff.differs && manual) overrideDiffs.push({ companyId: companyInfo.id, company: name, masterListMonth: manual.month, teamworkMonth: eff.teamworkMonth, by: manual.by, at: manual.at });
+        }
+      }
     }
 
     for (const r of companyRows) {
@@ -707,8 +783,95 @@ async function syncArWorkflow(req: NextRequest) {
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
+  // INV-AR-021: carry out (shadow: only describe) tonight's plan. A company whose TeamWork fetch failed has no plan item, so it is
+  // simply not touched tonight.
+  let planOutcome: PlanOutcome = emptyOutcome(AR_PLAN_APPLY ? 'apply' : 'shadow');
+  let planError: string | null = planInputError;
+  if (planEnabled) {
+    try {
+      planOutcome = await executeArPlans(supabase, planItems, {
+        apply: AR_PLAN_APPLY,
+        restoreBudget,
+        buildInsert: (companyId, w) => {
+          const c = companyById.get(companyId)!;   // planItems only hold companies of this map
+          return {
+            entity_name: w.slot.entity_name,
+            company_id: companyId,
+            uen: c.registration_no || '',
+            fye_month: w.slot.fye_month,
+            fye_year: w.slot.fye_year,
+            fye_date: w.slot.fye_date,
+            due_date: toDateStr(addMonths(new Date(`${w.slot.fye_date}T00:00:00Z`), 7)),
+            pic: resolveTeamworkPic(c.sec_pic ?? c.pic ?? null),
+            acc_pic: accFor(companyId, c.registration_no ?? null),
+            tax_pic: taxFor(companyId, c.registration_no ?? null),
+            acc_pic_manual: false,
+            tax_pic_manual: false,
+            status: 'Pending',
+          };
+        },
+      });
+    } catch (e) {
+      planError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // Things only a person can fix or should know about. A run that missed companies (fetch errors) must not close open ones.
+  let exceptionsError: string | null = null;
+  try {
+    const grace = fetchErrors > 0 ? { graceMs: 400 * 86_400_000 } : {};
+    await replaceAutomationExceptions('ar_workflow', 'fye_slip_cycle', fyeSuspects.map(s => ({
+      key: `${s.companyId}:${s.fyeIso}`, name: s.company,
+      details: { company_id: s.companyId, fye_date: s.fyeIso, kind: s.kind, message: `TeamWork has a cycle dated ${s.fyeIso} that looks like a keying slip. AR ignored it and keeps the company's FYE month. Correct the date in TeamWork. (${s.note})` },
+    })), grace);
+    await replaceAutomationExceptions('ar_workflow', 'fye_master_list_differs', overrideDiffs.map(d => ({
+      key: String(d.companyId), name: d.company,
+      details: { company_id: d.companyId, master_list_fye: d.masterListMonth, teamwork_fye: d.teamworkMonth, edited_by: d.by, edited_at: d.at, message: `AR Reminder follows the FYE month typed in Master List (${d.masterListMonth}), because staff edited it by hand; TeamWork shows ${d.teamworkMonth ?? 'another month'}. Make TeamWork match, or change the Master List FYE.` },
+    })), grace);
+    await replaceAutomationExceptions('ar_workflow', 'teamwork_bad_date', badCells.map(b => ({
+      key: `${b.companyId}:${b.column}:${b.event}:${b.yearLabel}:${b.raw}`.slice(0, 200), name: b.company,
+      details: { company_id: b.companyId, column: b.column, event: b.event, year: b.yearLabel, value: b.raw, message: `TeamWork's ${b.event} ${b.yearLabel} row has a ${b.column} date that is not a real calendar date ("${b.raw}"). It was ignored — correct it in TeamWork.` },
+    })), grace);
+    if (AR_PLAN_APPLY && !planOutcome.tripped) {
+      await replaceAutomationExceptions('ar_workflow', 'ar_row_not_restored', planOutcome.blocked.map(b => ({
+        key: String(b.id), name: b.company,
+        details: { ar_reminder_id: b.id, slot: b.slot, reason: b.why, hidden_by: b.by, message: `TeamWork has this cycle open, but its AR Reminder row (#${b.id}, ${b.slot}) is hidden and was NOT restored automatically (${b.why}). Restore it in AR Reminder if it should be back.` },
+      })), grace);
+    }
+    if (planOutcome.tripped) {
+      await replaceAutomationExceptions('ar_workflow', 'ar_plan_tripped', [{
+        key: 'plan', name: 'AR nightly plan',
+        details: { wanted: planOutcome.wanted, hidden: planOutcome.hidden.length, message: 'Tonight\'s AR plan asked for more changes than the safety limit allows, so NOTHING was applied. Check TeamWork for a mass data change before the next run.' },
+      }], grace);
+    } else {
+      await replaceAutomationExceptions('ar_workflow', 'ar_plan_tripped', [], grace);
+    }
+  } catch (e) {
+    exceptionsError = e instanceof Error ? e.message : String(e);
+  }
+
+  const head = <T,>(list: readonly T[]) => list.slice(0, PLAN_SUMMARY_EXAMPLES);
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0 && fyeCorrectionBackfillErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0 && fyeCorrectionBackfillErrors === 0
+      && (!AR_PLAN_APPLY || (!planError && planOutcome.failed.length === 0)),
+    ar_plan: {
+      mode: planOutcome.mode, ran: planEnabled, error: planError, tripped: planOutcome.tripped, exceeds_limit: planOutcome.exceedsLimit,
+      companies: planOutcome.companies, wanted: planOutcome.wanted, covered: planOutcome.covered,
+      restored: planOutcome.restored.length, inserted: planOutcome.inserted.length, hidden: planOutcome.hidden.length,
+      blocked: planOutcome.blocked.length, failed: planOutcome.failed.length,
+      reports: planOutcome.reports,
+      examples: {
+        restored: head(planOutcome.restored), inserted: head(planOutcome.inserted), hidden: head(planOutcome.hidden),
+        blocked: head(planOutcome.blocked), failed: head(planOutcome.failed),
+      },
+    },
+    fye_slip_cycles: fyeSuspects.length,
+    fye_slip_examples: head(fyeSuspects.map(s => ({ company: s.company, fye_date: s.fyeIso, kind: s.kind }))),
+    fye_master_list_differs: overrideDiffs.length,
+    fye_master_list_examples: head(overrideDiffs),
+    teamwork_bad_date_cells: badCells.length,
+    teamwork_bad_date_examples: head(badCells.map(b => ({ company: b.company, column: b.column, value: b.raw }))),
+    exceptions_error: exceptionsError,
     rows: rows.length,
     companies_checked: checked,
     extra_companies_added: extraCompaniesAdded,

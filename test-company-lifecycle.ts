@@ -278,8 +278,12 @@ const sourceFiles = ['app', 'lib', 'components'].flatMap(d => walk(join(ROOT, d)
   // three reviewed ones. A NEW one must be checked against INV-AR-017 (is it
   // reversible? does the safety net still cover it?) before it joins this list.
   const writers = sourceFiles.filter(f => (f.startsWith('app/') || f.startsWith('lib/')) && /status:\s*'Excluded'/.test(read(f)));
-  const reviewed = ['app/api/ar-reminder/route.ts', 'app/api/ar-reminder/sync-workflow/route.ts', 'app/api/late-filing/sync/route.ts'];
-  check('only the 3 reviewed code paths can hide an AR row (INV-AR-017 tripwire)', same(writers, reviewed), `found: ${writers.join(', ')}`);
+  // 2026-10-10 (INV-AR-021): lib/ar-plan-apply.ts (the nightly state-based plan) and lib/ar-fye-reanchor.ts (a Master List FYE edit moves
+  // AR at once) joined the list after review against INV-AR-017: each hides a row only with the system's own FYE-exclusion actor
+  // (restorable by lib/ar-fye-restore.ts, read from ar_reminder_audit), behind per-run breakers (15 hides, 60 changes in total), never a
+  // row under the company's FYE month, and a replaced row only AFTER its replacement exists; the INV-AR-017 safety net still applies.
+  const reviewed = ['app/api/ar-reminder/route.ts', 'app/api/ar-reminder/sync-workflow/route.ts', 'app/api/late-filing/sync/route.ts', 'lib/ar-fye-reanchor.ts', 'lib/ar-plan-apply.ts'];
+  check('only the 5 reviewed code paths can hide an AR row (INV-AR-017 tripwire)', same(writers, reviewed), `found: ${writers.join(', ')}`);
 }
 
 // ── The "one definition" guard (INV-AR-018) ──────────────────────────────

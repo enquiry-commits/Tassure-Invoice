@@ -61,6 +61,7 @@ export interface MasterListRow {
   mas: string | null;
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
+  fye_manual?: boolean;        // the FYE cell was typed by staff (Active Client): AR Reminder follows it over TeamWork's month
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
   is_css_client?: boolean | null; // TeamWork client_type === 'CSS Client' AND still active there (null when not matched to a TeamWork company at all)
   css_client_inactive?: boolean;  // matched to a CSS Client company, but TeamWork now shows it as inactive
@@ -122,7 +123,7 @@ function dateMismatch(a: string | null | undefined, b: string | null | undefined
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'css_client_inactive' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name' | 'manual_fields'>;
+  'id' | 'tw_fye' | 'fye_manual' | 'in_teamwork' | 'is_css_client' | 'css_client_inactive' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name' | 'manual_fields'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -2023,7 +2024,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             : <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
                                 <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                                 <span
-                                  title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
+                                  title={r.fye_manual
+                                    ? `⚠ FYE mismatch — TeamWork says "${r.tw_fye}", this cell says "${r.fye}" (typed by staff). AR Reminder follows THIS cell (${r.fye}) until TeamWork is corrected or you change/clear it here.`
+                                    : `⚠ FYE mismatch — TeamWork says "${r.tw_fye}", this cell says "${r.fye}" (never edited by staff here). AR Reminder follows TeamWork (${r.tw_fye}). Please verify which is correct.`}
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
                                   <AlertTriangle size={10} />TW:{String(r.tw_fye).slice(0, 3).toUpperCase()}
                                 </span>

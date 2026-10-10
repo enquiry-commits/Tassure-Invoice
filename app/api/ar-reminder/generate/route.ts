@@ -7,6 +7,7 @@ import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamw
 import { toDateStr, addMonths } from '@/lib/date';
 import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
 import { restoreFyeExcludedRows, newRestoreBudget, slotKey, type Slot } from '@/lib/ar-fye-restore';
+import { loadManualFyeByUen, effectiveFyeForCompany, type ManualFyeEntry } from '@/lib/ar-fye-manual';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -119,11 +120,35 @@ async function generateArRows() {
   // gave the right answer by accident: SQL's `NULL NOT IN (...)` is unknown,
   // so it also silently dropped the 9 untracked companies with no TeamWork
   // status. Same 904 companies, now on purpose.
-  const { data: companies, error } = await onlyTeamworkActiveCompanies(supabase
+  const { data: companiesRaw, error } = await onlyTeamworkActiveCompanies(supabase
     .from('companies')
     .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status, internal_id'));
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // INV-AR-021: AR runs on the FYE month staff DELIBERATELY typed in Master List, otherwise on TeamWork's month (companies.fye_month,
+  // which the nightly sync derives from TeamWork and never from a keying slip). Everything below reads `companies` through this one
+  // view, so the forward window, the catch-up and its exceptions all use the same month. If Master List cannot be read tonight, fall
+  // back to TeamWork's month (the behaviour before the rule existed) and say so in the result.
+  let manualByUen = new Map<string, ManualFyeEntry>();
+  let manualFyeError: string | null = null;
+  try {
+    manualByUen = await loadManualFyeByUen(supabase);
+  } catch (e) {
+    manualFyeError = e instanceof Error ? e.message : String(e);
+  }
+  let fyeOverridesInEffect = 0;
+  const overrideIds = new Set<number>();
+  const companies = (companiesRaw ?? []).map(c => {
+    const eff = effectiveFyeForCompany(c, manualByUen);
+    if (eff.source === 'master-list' && eff.effective && eff.effective !== c.fye_month) {
+      fyeOverridesInEffect++;
+      overrideIds.add(c.id);
+      // the typed month projects to its month-end (TeamWork's fye_day belongs to the month TeamWork shows)
+      return { ...c, fye_month: eff.effective, fye_day: null };
+    }
+    return c;
+  });
 
   // No upstream system tracks Accounts/Tax PIC assignment (unlike Secretary,
   // sourced from companies.pic above) — carry forward each company's own
@@ -240,7 +265,9 @@ async function generateArRows() {
   // cycle at all (e.g. its only history is years-old and already
   // completed) is left alone and counted in `catchUpSkipped` rather than
   // guessing at a fabricated cycle.
-  const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
+  // (A company on a Master List FYE override is left to the nightly plan in sync-workflow: this pass labels a row with the company's
+  // month but dates it with TeamWork's cycle, which would disagree for such a company.)
+  const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id && !overrideIds.has(c.id));
   let catchUpInserted = 0;
   let catchUpRestored = 0; // rows the system hid for an FYE correction, brought back (INV-AR-019)
   const catchUpBlocked: { id: number; entity_name: string; fye_month: string; fye_year: number; excluded_by: string | null; reason: string }[] = [];
@@ -491,7 +518,7 @@ async function generateArRows() {
   totalInserted += catchUpInserted;
   errors.push(...catchUpErrors);
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpRestored, catchUpBlocked: catchUpBlocked.length, catchUpSkipped, catchUpLinked, catchUpDeadlineHit, summary, errors };
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpRestored, catchUpBlocked: catchUpBlocked.length, catchUpSkipped, catchUpLinked, catchUpDeadlineHit, fyeOverridesInEffect, manualFyeError, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 

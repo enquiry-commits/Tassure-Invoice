@@ -5965,10 +5965,12 @@ again.
   Aug). When the FYE returned nothing restored #714: the catch-up's
   `ignoreDuplicates` upsert (INV-AR-002) and the correction's own insert both
   hit the unique key held by that Excluded row, silently, while the run counted
-  the row as inserted (INV-AR-020). AR follows `companies.fye_month`, derived
+  the row as inserted (INV-AR-020). AR followed `companies.fye_month`, derived
   from TeamWork's AGM/AR event history (INV-TW-002) — NOT Master List's FYE
   column (manual: Vincent set it SEP→OCT on 5 Aug 07:53, Lim Hoe Chyi set it
-  back on 19 Aug 03:34). `parseDmy` also rolls impossible dates over
+  back on 19 Aug 03:34). **Superseded in part by INV-AR-021 (2026-10-10):** a
+  month staff deliberately typed in Master List now wins over TeamWork's, and a
+  keying-slip cycle no longer moves TeamWork's month. `parseDmy` also rolls impossible dates over
   (31/09/2026 → 2026-10-01, 31/06 → 01/07, 29/02/2027 → 01/03) and returns an
   Invalid Date for 32/01/2026 that makes `toIsoDate` throw — a mistyped
   TeamWork date can manufacture the same anomaly (known defect, deliberately NOT
@@ -6009,3 +6011,71 @@ again.
   than 12 months old). It only REPORTS and never repairs: no fifth restore
   mechanism. Companies without a unique Master List row for the UEN are listed
   as not evaluated, never guessed. Guarded by `test-ar-coverage.ts`.
+- **INV-AR-021** — AR Reminder runs on ONE FYE month per company, decided in one
+  place, and its rows are recomputed from the CURRENT state every night, not
+  patched when something changes (Vincent, 2026-10-10: "AR 必须每晚按最新状态重算";
+  "员工特地在 Master List 改的 FYE，AR 就先按它跑，TW 不一样就提醒，不是不参与判断").
+  (1) THE MONTH — `lib/ar-fye-resolve.ts` `resolveEffectiveFye`: a month staff
+  DELIBERATELY typed into Master List's FYE column (Active Client row) wins;
+  otherwise TeamWork's month. "Deliberate" = the latest `audit_log` entry of
+  that cell was made by a person (an e-mail, not `system:…`/`unknown`) and holds
+  the value that is there now, or `master_list.manual_fields.fye` is set (the
+  PATCH handler sets it on every deliberate edit and clears it when the cell is
+  cleared). A cell nobody ever edited here (imported with the sheet) or one
+  automation wrote last does NOT count — it follows TeamWork (Vincent chose
+  "只算员工特地改过的"). `companies.fye_month` keeps meaning "what TeamWork says"
+  (billing, e-mails, Company 360 read it); only AR code asks for the effective
+  month (`lib/ar-fye-manual.ts`: generate's forward window and catch-up, the
+  nightly plan, the Master List edit). A difference is recorded, never silent:
+  Automation Health exception `fye_master_list_differs`, and the Master List
+  mismatch badge says which month AR follows. The override ends only when staff
+  change or clear the cell (a later TeamWork change does NOT end it — the
+  exception keeps asking). 2026-10-10 reality: 795 Active Client FYEs, ONE
+  mismatch with TeamWork (SOQ: JUN vs DEC, never edited here → AR follows
+  TeamWork), 31 staff edits since 4 Aug all agreeing with TeamWork now; BEAUTY's
+  own SEP→OCT edit (5 Aug) would have switched AR to October BY DESIGN and
+  hoechyi's OCT→SEP (19 Aug) back at once.
+  (2) TEAMWORK'S MONTH — `assessFye`: the month of the LATEST cycle (AGM and AR
+  rows with the same exact FYE date are one cycle), unless that cycle looks like
+  a keying slip: it is not held/filed AND either lands within 3 days of an
+  anniversary of an earlier cycle but in another month (30 Sep → 01 Oct) or is a
+  non-month-end while every earlier FYE is. A genuine change (month-end, e.g.
+  JUN→DEC) is accepted at once. Refused cycles raise exception `fye_slip_cycle`.
+  Dates are read STRICTLY (`parseDmyStrict`): 31/09/2026 is unreadable, not
+  1 October (exception `teamwork_bad_date`); an unreadable held/filing cell makes
+  the cycle "uncertain" and nothing is decided on it. Against the 17 Jun snapshot
+  the gate overrules the old "latest FYE wins" for exactly one of 784 companies
+  (BEAUTY). `parseDmy`/`toIsoDate` themselves are unchanged for their other callers.
+  (3) THE NIGHTLY PLAN — `lib/ar-cycle-plan.ts` `planCompanyAr`, run by
+  sync-workflow for every active company with the history it already fetched
+  (zero extra TeamWork calls), executed after the loop by `lib/ar-plan-apply.ts`:
+  WANTED = an open cycle (neither AGM held nor AR filed) whose FYE is between
+  12 months ago and the end of the generate window, with no visible row under the
+  effective month → restore the system's own exclusion (INV-AR-019 rules), else
+  insert; HIDE = a visible, unfiled row under ANOTHER month than the FYE month
+  for which TeamWork has no cycle at that exact date (a ghost — Late Filing's
+  #866/#867), or one a Master List edit replaced; REPORTS = suspect/uncertain/
+  stale/other-month cycles, date drift. Never: a row under the FYE month, a
+  filed row, a person's exclusion, anything for a company with an empty history
+  or off the active roster (`isTeamworkActiveCompany`), anything from a
+  month-limited run or when its inputs could not be read. Budgets per run:
+  restore 10, insert 10, hide 15, and if wanted + hide exceeds 60 the PLAN is
+  suspect and NOTHING is applied (exception `ar_plan_tripped`). Rows match a cycle
+  by exact date or by month + (calendar year | TeamWork's own year label) —
+  14 of 1,656 snapshot rows have a label that is not the FYE's calendar year.
+  ROLLOUT: `AR_PLAN_APPLY` in sync-workflow ships `false` = SHADOW: the plan is
+  computed and recorded in the run summary (`ar_plan`) and changes nothing; the
+  old edge-triggered hide/backfill still run. Read one night, then flip it; once
+  true those two blocks are skipped (the plan keeps a real overdue cycle of the
+  old month, which the old block hid).
+  (4) A MASTER LIST EDIT MOVES AR AT ONCE — `lib/ar-fye-reanchor.ts`, called by
+  the PATCH handler after a saved FYE edit (no TeamWork call in a web request):
+  the visible, unfiled rows under the month AR used to run on get a row under the
+  new month FIRST (restored if the system hid it, else inserted), and only then
+  are hidden; any failure leaves the old row visible. The nightly plan is the
+  backstop. (5) HIDING — `lib/ar-plan-apply.ts` and `lib/ar-fye-reanchor.ts` are
+  the 4th and 5th reviewed AR-hiding paths (INV-AR-017 tripwire in
+  `test-company-lifecycle.ts`): the system's own FYE-exclusion actor (restorable),
+  breakers, guarded updates, the INV-AR-017 safety net still applies.
+  Guarded by `test-ar-fye-resolve.ts`, `test-ar-cycle-plan.ts`,
+  `test-ar-plan-apply.ts`. Read-only live check: `scripts/ar-plan-dryrun.ts`.
